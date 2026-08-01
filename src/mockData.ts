@@ -71,6 +71,7 @@ export function generatePlayers(count: PlayerCount): Player[] {
     isHost: i === 0,
     isReady: true,
     connection: 'online' as const,
+    isCurrentPlayer: i === 0,
     cardsRemaining: Math.floor(52 / count),
   }));
 }

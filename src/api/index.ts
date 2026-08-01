@@ -15,6 +15,9 @@ export type {
   JoinRoomResponse,
 } from './rooms';
 
+export { parseSessionValidationErrorCode, parseValidateSessionResponse, validateBeforeOpeningSocket, validateRoomSession } from './sessionValidation';
+export type { SessionValidationRejectionCode, ValidateRoomSessionResult, ValidateSessionResponse } from './sessionValidation';
+
 // Room-state transport and UI adapter
 export { adaptRoomState } from './roomAdapter';
 export type { BackendRoomPlayer, BackendRoomState, RoomStateUpdateMessage } from './roomState';

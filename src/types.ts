@@ -41,6 +41,7 @@ export interface Player {
   isHost: boolean;
   isReady: boolean;
   connection: ConnectionStatus;
+  isCurrentPlayer: boolean;
   cardsRemaining?: number;
   isTrumpHider?: boolean;
   isStartingPlayer?: boolean;
@@ -72,6 +73,7 @@ export interface TrickState {
 
 export type GameScreen =
   | 'landing'
+  | 'resume'
   | 'create'
   | 'join'
   | 'lobby'

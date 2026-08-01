@@ -1,4 +1,4 @@
-import { Crown, Settings2, Play, LogOut, Copy, Check, UserPlus } from 'lucide-react';
+import { Crown, Settings2, Play, LogOut, Check, UserPlus } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/Button';
 import { RoomCodeDisplay } from '@/components/ui/RoomCodeDisplay';
@@ -78,7 +78,6 @@ export function LobbyPage({ room, meId, onStart, onLeave }: LobbyPageProps) {
               team={team}
               room={room}
               seats={seatsPerTeam}
-              meId={meId}
             />
           ))}
         </div>
@@ -117,12 +116,10 @@ function TeamPanel({
   team,
   room,
   seats,
-  meId,
 }: {
   team: TeamId;
   room: RoomState;
   seats: number;
-  meId: string;
 }) {
   const teamPlayers = room.players.filter((p) => p.team === team);
   const emptySeats = Math.max(0, seats - teamPlayers.length);
@@ -138,7 +135,7 @@ function TeamPanel({
       </div>
       <div className="p-3 space-y-2">
         {teamPlayers.map((p) => (
-          <PlayerRow key={p.id} player={p} isMe={p.id === meId} />
+          <PlayerRow key={p.id} player={p} isMe={p.isCurrentPlayer} />
         ))}
         {Array.from({ length: emptySeats }).map((_, i) => (
           <div

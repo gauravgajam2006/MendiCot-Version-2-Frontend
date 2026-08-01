@@ -10,7 +10,6 @@ interface JoinRoomPageProps {
   onBack: () => void;
   onJoin: (input: { code: string; name: string }) => void;
 }
-
 export function JoinRoomPage({ onBack, onJoin }: JoinRoomPageProps) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
@@ -30,7 +29,7 @@ export function JoinRoomPage({ onBack, onJoin }: JoinRoomPageProps) {
     // Simulate join attempt; the parent will navigate on success.
     setTimeout(() => {
       setLoading(false);
-      onJoin({ code: code.trim().toUpperCase(), name: name.trim() });
+      onJoin({ code: normalizedCode, name: name.trim() });
     }, 700);
   };
 

@@ -22,14 +22,21 @@ export const BASE_URL = 'http://127.0.0.1:8000';
 
 /** Structured error returned when the backend responds with a non-2xx status. */
 export class ApiError extends Error {
+  public readonly status: number;
+  public readonly statusText: string;
+  /** The parsed JSON body, if the server returned one. `null` otherwise. */
+  public readonly body: unknown;
+
   constructor(
-    public readonly status: number,
-    public readonly statusText: string,
-    /** The parsed JSON body, if the server returned one.  `null` otherwise. */
-    public readonly body: unknown,
+    status: number,
+    statusText: string,
+    body: unknown,
   ) {
     super(`API ${status} ${statusText}`);
     this.name = 'ApiError';
+    this.status = status;
+    this.statusText = statusText;
+    this.body = body;
   }
 }
 

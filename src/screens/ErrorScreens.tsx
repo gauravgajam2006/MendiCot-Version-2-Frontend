@@ -8,13 +8,14 @@ type ErrorKind =
   | 'room-not-found'
   | 'room-full'
   | 'game-started'
+  | 'invalid-request'
   | 'disconnected'
   | 'generic';
 
 const errorContent: Record<ErrorKind, { title: string; description: string; icon: typeof AlertTriangle }> = {
   'room-not-found': {
-    title: 'Room not found',
-    description: "We couldn't find a room with that code. Double-check it with your friend.",
+    title: 'Incorrect Room Code',
+    description: 'Please check the room code and try again.',
     icon: Users,
   },
   'room-full': {
@@ -25,6 +26,11 @@ const errorContent: Record<ErrorKind, { title: string; description: string; icon
   'game-started': {
     title: 'Game already started',
     description: 'This table is mid-game. You can join the next round once it ends.',
+    icon: AlertTriangle,
+  },
+  'invalid-request': {
+    title: 'Invalid request',
+    description: 'Please check the room code and your display name, then try again.',
     icon: AlertTriangle,
   },
   disconnected: {
@@ -44,7 +50,6 @@ interface ErrorScreenProps {
   onRetry?: () => void;
   onHome: () => void;
 }
-
 export function ErrorScreen({ kind, onRetry, onHome }: ErrorScreenProps) {
   const cfg = errorContent[kind];
   const Icon = cfg.icon;
@@ -71,7 +76,6 @@ export function ErrorScreen({ kind, onRetry, onHome }: ErrorScreenProps) {
     </div>
   );
 }
-
 export function ConnectingScreen({ label = 'Connecting to the room' }: { label?: string }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6">
