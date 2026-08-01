@@ -1,9 +1,13 @@
 import type { PlayerCount, TrumpMode } from '@/types';
 
+export type BackendTeamId = 'TeamA' | 'TeamB';
+
 /** Player data as sent by the room WebSocket. */
 export interface BackendRoomPlayer {
   player_id: string;
   display_name: string;
+  team_id: BackendTeamId;
+  seat_index: number;
   is_online: boolean;
 }
 

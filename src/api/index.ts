@@ -20,7 +20,7 @@ export type { SessionValidationRejectionCode, ValidateRoomSessionResult, Validat
 
 // Room-state transport and UI adapter
 export { adaptRoomState } from './roomAdapter';
-export type { BackendRoomPlayer, BackendRoomState, RoomStateUpdateMessage } from './roomState';
+export type { BackendRoomPlayer, BackendRoomState, BackendTeamId, RoomStateUpdateMessage } from './roomState';
 
 // WebSocket
 export { GameSocket } from './websocket';

@@ -31,6 +31,8 @@ export type PlayerCount = 4 | 6 | 8;
 
 export type TrumpMode = 'normal' | 'hidden';
 
+export type RoomStatus = 'WAITING' | 'IN_GAME';
+
 export type ConnectionStatus = 'online' | 'offline' | 'connecting';
 
 export interface Player {
@@ -89,6 +91,7 @@ export interface RoomConfig {
 }
 
 export interface RoomState {
+  status: RoomStatus;
   config: RoomConfig;
   players: Player[];
   hostId: string;

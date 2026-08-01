@@ -5,24 +5,43 @@ import { RoomCodeDisplay } from '@/components/ui/RoomCodeDisplay';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusIndicator } from '@/components/ui/StatusIndicator';
 import { TeamBadge } from '@/components/ui/TeamBadge';
+import type { BackendTeamId } from '@/api';
+import { getLobbyStartState, getTeamSwitchControl } from '@/utils/lobbyState';
 import type { Player, RoomState, TeamId } from '@/types';
 
 interface LobbyPageProps {
   room: RoomState;
   meId: string;
+  pendingTeamSwitch: BackendTeamId | null;
+  startPending: boolean;
+  actionMessage: string | null;
+  onSwitchTeam: (targetTeam: TeamId) => void;
   onStart: () => void;
   onLeave: () => void;
 }
 
-export function LobbyPage({ room, meId, onStart, onLeave }: LobbyPageProps) {
+export function LobbyPage({
+  room,
+  meId,
+  pendingTeamSwitch,
+  startPending,
+  actionMessage,
+  onSwitchTeam,
+  onStart,
+  onLeave,
+}: LobbyPageProps) {
   const me = room.players.find((p) => p.id === meId);
   const isHost = me?.isHost ?? false;
   const onlineCount = room.players.filter((p) => p.connection === 'online').length;
   const readyCount = room.players.filter((p) => p.isReady && p.connection === 'online').length;
-  const canStart = onlineCount === room.config.playerCount && readyCount === room.config.playerCount;
+  const startState = getLobbyStartState(room, meId);
+  const startDisabled = !startState.canStart || pendingTeamSwitch !== null || startPending;
+  const switchControl = me && room.status === 'WAITING'
+    ? getTeamSwitchControl(me, meId)
+    : null;
 
   const teams: TeamId[] = ['A', 'B'];
-  const seatsPerTeam = Math.ceil(room.config.playerCount / 2);
+  const seatsPerTeam = startState.requiredTeamSize;
 
   return (
     <div className="min-h-screen">
@@ -54,7 +73,30 @@ export function LobbyPage({ room, meId, onStart, onLeave }: LobbyPageProps) {
               {onlineCount} of {room.config.playerCount} players online · {readyCount} ready
             </p>
           </div>
-          <RoomCodeDisplay code={room.config.code} size="md" />
+          <div className="flex w-full max-w-xs self-center flex-col items-center gap-3 sm:w-auto sm:max-w-none sm:self-auto">
+            <RoomCodeDisplay code={room.config.code} size="md" />
+            {switchControl && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-11 w-full sm:h-9 sm:w-auto"
+                aria-label={switchControl.label}
+                disabled={pendingTeamSwitch !== null || startPending}
+                loading={pendingTeamSwitch !== null}
+                onClick={() => onSwitchTeam(switchControl.targetTeam)}
+              >
+                {pendingTeamSwitch !== null ? 'Switching…' : 'Switch Team'}
+              </Button>
+            )}
+            {actionMessage && (
+              <p
+                role="status"
+                className="w-full rounded-lg border border-crimson-500/40 bg-crimson-500/10 px-3 py-2 text-center text-sm text-crimson-400"
+              >
+                {actionMessage}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Config summary */}
@@ -87,17 +129,15 @@ export function LobbyPage({ room, meId, onStart, onLeave }: LobbyPageProps) {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <p className="font-display text-lg font-semibold text-bone-50">
-                {canStart ? 'Ready to deal' : 'Waiting for players'}
+                {startState.canStart && pendingTeamSwitch === null ? 'Ready to deal' : 'Not ready to start'}
               </p>
               <p className="mt-1 text-sm text-bone-300">
-                {canStart
-                  ? 'All players are online and ready. Start the setup ceremony.'
-                  : `Need ${room.config.playerCount - onlineCount} more online and ${room.config.playerCount - readyCount} more ready.`}
+                {pendingTeamSwitch !== null ? 'Waiting for the team switch to finish.' : startState.reason}
               </p>
             </div>
             {isHost ? (
-              <Button size="lg" onClick={onStart} disabled={!canStart}>
-                <Play size={16} /> Start Game
+              <Button size="lg" onClick={onStart} disabled={startDisabled} loading={startPending}>
+                <Play size={16} /> {startPending ? 'Starting…' : 'Start Game'}
               </Button>
             ) : (
               <div className="flex items-center gap-2 text-sm text-bone-400">
@@ -130,12 +170,12 @@ function TeamPanel({
       <div className={['flex items-center justify-between border-b hairline px-4 py-3', isA ? 'bg-emerald-900/20' : 'bg-gold-700/15'].join(' ')}>
         <TeamBadge team={team} name={room.teams[team]} size="md" />
         <span className="text-2xs text-bone-400 uppercase tracking-wider">
-          {teamPlayers.length}/{seats} seated
+          {teamPlayers.length} / {seats} seated
         </span>
       </div>
       <div className="p-3 space-y-2">
         {teamPlayers.map((p) => (
-          <PlayerRow key={p.id} player={p} isMe={p.isCurrentPlayer} />
+          <PlayerRow key={p.id} player={p} />
         ))}
         {Array.from({ length: emptySeats }).map((_, i) => (
           <div
@@ -153,36 +193,38 @@ function TeamPanel({
   );
 }
 
-function PlayerRow({ player, isMe }: { player: Player; isMe: boolean }) {
+function PlayerRow({ player }: { player: Player }) {
   return (
     <div
       className={[
-        'flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+        'rounded-lg border px-3 py-2.5 transition-colors',
         player.connection === 'offline'
           ? 'border-ink-700 bg-ink-900/60 opacity-70'
           : 'border-ink-600 bg-ink-900',
       ].join(' ')}
     >
-      <Avatar name={player.displayName} team={player.team} size="sm" online={player.connection === 'online'} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-medium text-bone-100 truncate">
-            {player.displayName}{isMe ? ' (You)' : ''}
-          </span>
-          {player.isHost && <Crown size={12} className="text-gold-400 shrink-0" />}
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar name={player.displayName} team={player.team} size="sm" online={player.connection === 'online'} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <span className="text-sm font-medium text-bone-100 break-words">
+              {player.displayName}{player.isCurrentPlayer ? ' (You)' : ''}
+            </span>
+            {player.isHost && <Crown size={12} className="shrink-0 text-gold-400" />}
+          </div>
+          <div className="mt-0.5">
+            <StatusIndicator status={player.connection} />
+          </div>
         </div>
-        <div className="mt-0.5">
-          <StatusIndicator status={player.connection} />
+        <div className="flex shrink-0 items-center gap-2">
+          {player.isReady && player.connection === 'online' ? (
+            <span className="inline-flex items-center gap-1 text-2xs text-emerald-300 uppercase tracking-wider">
+              <Check size={12} /> Ready
+            </span>
+          ) : (
+            <span className="text-2xs text-bone-400 uppercase tracking-wider">Waiting</span>
+          )}
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {player.isReady && player.connection === 'online' ? (
-          <span className="inline-flex items-center gap-1 text-2xs text-emerald-300 uppercase tracking-wider">
-            <Check size={12} /> Ready
-          </span>
-        ) : (
-          <span className="text-2xs text-bone-400 uppercase tracking-wider">Waiting</span>
-        )}
       </div>
     </div>
   );

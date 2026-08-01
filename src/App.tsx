@@ -13,7 +13,7 @@ import { ErrorScreen, ConnectingScreen } from '@/screens/ErrorScreens';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { ToastStack } from '@/components/ui/Toast';
 import { adaptRoomState, ApiError, createRoom, GameSocket, joinRoom, validateBeforeOpeningSocket, validateRoomSession } from '@/api';
-import type { BackendRoomState, SessionValidationRejectionCode, ValidateSessionResponse, WsInboundMessage } from '@/api';
+import type { BackendRoomState, BackendTeamId, SessionValidationRejectionCode, ValidateSessionResponse, WsInboundMessage } from '@/api';
 import { normalizeRoomCode, ROOM_CODE_LENGTH } from '@/utils/roomCode';
 import { classifyJoinError } from '@/utils/joinError';
 import type { JoinErrorKind } from '@/utils/joinError';
@@ -36,6 +36,7 @@ import type { RoomSession } from '@/utils/roomSession';
 import { classifySessionClose, isCurrentSessionSocket, isExplicitSessionRejectionMessage } from '@/utils/sessionRejection';
 import { INITIAL_RESTORATION_STATE, isRestorationNoticeState, restorationStateForCode, restorationStateForStartup } from '@/utils/restorationState';
 import type { RestorationState } from '@/utils/restorationState';
+import { createTeamSwitchRequest, getLobbyStartState, isTeamSwitchConfirmed, resolveLobbyActionError } from '@/utils/lobbyState';
 import type { ToastMessage } from '@/types';
 import { ME_ID, generatePlayers, mockHand, mockPlayableIds, mockScores, mockTrick, mockTrump } from '@/mockData';
 import type { Card, GameScreen, PlayerCount, ReconnectState, RoomState, TeamId, TrumpMode } from '@/types';
@@ -66,11 +67,15 @@ function isBackendRoomState(value: unknown): value is BackendRoomState {
     && value.players.every((player) => isObject(player)
       && typeof player.player_id === 'string'
       && typeof player.display_name === 'string'
+      && (player.team_id === 'TeamA' || player.team_id === 'TeamB')
+      && Number.isInteger(player.seat_index)
+      && (player.seat_index as number) >= 0
       && typeof player.is_online === 'boolean');
 }
 
 function createInitialRoomState(): RoomState {
   return {
+    status: 'WAITING',
     config: { code: 'DEMO1234', playerCount: 4, trumpMode: 'normal' },
     players: generatePlayers(4),
     hostId: ME_ID,
@@ -98,6 +103,9 @@ function App() {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [activeSessionKey, setActiveSessionKey] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomState>(createInitialRoomState);
+  const [pendingTeamSwitch, setPendingTeamSwitch] = useState<BackendTeamId | null>(null);
+  const [startPending, setStartPending] = useState(false);
+  const [lobbyActionMessage, setLobbyActionMessage] = useState<string | null>(null);
   const [trump, setTrump] = useState(mockTrump);
   const [trick, setTrick] = useState(mockTrick);
   const [scores] = useState(mockScores);
@@ -117,6 +125,8 @@ function App() {
   const validationAbortRef = useRef<AbortController | null>(null);
   const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingResumeRef = useRef<{ choice: ResumeSessionChoice; takeOver: boolean } | null>(null);
+  const pendingTeamSwitchRef = useRef<BackendTeamId | null>(null);
+  const startPendingRef = useRef(false);
 
   const cancelSessionValidation = useCallback(() => {
     validationAttemptRef.current += 1;
@@ -128,7 +138,16 @@ function App() {
     }
   }, []);
 
+  const clearLobbyPendingActions = useCallback((clearMessage = true) => {
+    pendingTeamSwitchRef.current = null;
+    startPendingRef.current = false;
+    setPendingTeamSwitch(null);
+    setStartPending(false);
+    if (clearMessage) setLobbyActionMessage(null);
+  }, []);
+
   const closeActiveSocket = useCallback(() => {
+    clearLobbyPendingActions();
     connectionGenerationRef.current += 1;
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
@@ -137,7 +156,7 @@ function App() {
     const socket = socketRef.current;
     socketRef.current = null;
     socket?.close();
-  }, []);
+  }, [clearLobbyPendingActions]);
 
   const resetRuntimeConnection = useCallback(() => {
     cancelSessionValidation();
@@ -232,6 +251,23 @@ function App() {
           rejectCurrentSession(socket);
           return;
         }
+        if (message.type === 'ERROR') {
+          const actionError = resolveLobbyActionError(
+            message.payload,
+            pendingTeamSwitchRef.current,
+            startPendingRef.current,
+          );
+          if (actionError?.action === 'switch-team') {
+            pendingTeamSwitchRef.current = null;
+            setPendingTeamSwitch(null);
+            setLobbyActionMessage(actionError.message);
+          } else if (actionError?.action === 'start-game') {
+            startPendingRef.current = false;
+            setStartPending(false);
+            setLobbyActionMessage(actionError.message);
+          }
+          return;
+        }
         if (message.type !== 'ROOM_STATE_UPDATE') return;
         if (!isBackendRoomState(message.payload)) {
           console.error('[Room Session] Received an invalid ROOM_STATE_UPDATE payload.');
@@ -250,6 +286,23 @@ function App() {
           return;
         }
 
+        const switchConfirmed = isTeamSwitchConfirmed(
+          pendingTeamSwitchRef.current,
+          currentPlayer.team_id,
+        );
+        const authoritativeStatus = message.payload.status;
+        const startConfirmed = startPendingRef.current && authoritativeStatus === 'IN_GAME';
+        if (switchConfirmed) {
+          pendingTeamSwitchRef.current = null;
+          setPendingTeamSwitch(null);
+          setLobbyActionMessage(null);
+        }
+        if (startConfirmed) {
+          startPendingRef.current = false;
+          setStartPending(false);
+          setLobbyActionMessage(null);
+        }
+
         receivedRoomState = true;
         reconnectAttemptsRef.current = 0;
         saveRoomSession({
@@ -260,13 +313,18 @@ function App() {
         });
         setRoom(adaptRoomState(message.payload, session.playerId));
         pendingResumeRef.current = null;
-        setScreen('lobby');
+        setScreen((currentScreen) => {
+          if (startConfirmed) return 'host-setup';
+          if (authoritativeStatus === 'WAITING') return 'lobby';
+          return currentScreen === 'host-setup' ? currentScreen : 'lobby';
+        });
         setRestorationState('idle');
         setConnecting(false);
         setReconnect('connected');
       },
       onClose: (code, reason) => {
         if (!isCurrentGeneration(socket) || isLeavingRef.current) return;
+        clearLobbyPendingActions();
         if (classifySessionClose(code, reason) === 'expire-session') {
           console.warn('[Room Session] The server rejected this saved session.', { code, reason });
           rejectCurrentSession(socket);
@@ -304,7 +362,7 @@ function App() {
 
     socketRef.current = socket;
     socket.connect(publicRoomId, session.sessionToken);
-  }, [closeActiveSocket, finishExpiredSession, resetRuntimeConnection, showAvailableSessions]);
+  }, [clearLobbyPendingActions, closeActiveSocket, finishExpiredSession, resetRuntimeConnection, showAvailableSessions]);
   connectSessionRef.current = connectRoomSession;
 
   const openValidatedSession = useCallback((
@@ -570,6 +628,48 @@ function App() {
     }
   };
 
+  const handleSwitchTeam = (targetTeam: TeamId) => {
+    const socket = socketRef.current;
+    const currentPlayer = room.players.find((player) => player.id === currentPlayerId);
+    if (
+      startPendingRef.current
+      || room.status !== 'WAITING'
+      || !currentPlayer
+      || currentPlayer.team === targetTeam
+    ) return;
+
+    const request = createTeamSwitchRequest(pendingTeamSwitchRef.current, targetTeam);
+    if (!request) return;
+    if (!socket?.isConnected) {
+      setLobbyActionMessage('Could not switch teams. Please try again.');
+      return;
+    }
+
+    pendingTeamSwitchRef.current = request.pendingTeamId;
+    setPendingTeamSwitch(request.pendingTeamId);
+    setLobbyActionMessage(null);
+    socket.send(request.message);
+  };
+
+  const handleStartGame = () => {
+    const socket = socketRef.current;
+    const startState = getLobbyStartState(room, currentPlayerId);
+    if (!startState.canStart) {
+      setLobbyActionMessage(startState.reason);
+      return;
+    }
+    if (pendingTeamSwitchRef.current !== null || startPendingRef.current) return;
+    if (!socket?.isConnected) {
+      setLobbyActionMessage('Could not start the game. Please try again.');
+      return;
+    }
+
+    startPendingRef.current = true;
+    setStartPending(true);
+    setLobbyActionMessage(null);
+    socket.send({ action: 'START_GAME', payload: {} });
+  };
+
   const handleDeal = (setup: { firstPlayerId: string; trumpHiderId?: string }) => {
     if (room.config.trumpMode === 'hidden' && setup.trumpHiderId === currentPlayerId) setScreen('hidden-trump');
     else {
@@ -607,7 +707,18 @@ function App() {
         {screen === 'landing' && <LandingPage onCreate={() => { setRestorationState('idle'); setScreen('create'); }} onJoin={() => { setRestorationState('idle'); setScreen('join'); }} />}
         {screen === 'create' && <CreateRoomPage onBack={goHome} onCreate={handleCreate} />}
         {screen === 'join' && <JoinRoomPage onBack={goHome} onJoin={handleJoin} />}
-        {screen === 'lobby' && <LobbyPage room={room} meId={currentPlayerId} onStart={() => setScreen('host-setup')} onLeave={handleLeave} />}
+        {screen === 'lobby' && (
+          <LobbyPage
+            room={room}
+            meId={currentPlayerId}
+            pendingTeamSwitch={pendingTeamSwitch}
+            startPending={startPending}
+            actionMessage={lobbyActionMessage}
+            onSwitchTeam={handleSwitchTeam}
+            onStart={handleStartGame}
+            onLeave={handleLeave}
+          />
+        )}
         {screen === 'host-setup' && <HostSetupPage room={room} meId={currentPlayerId} onDeal={handleDeal} onCancel={() => setScreen('lobby')} />}
         {screen === 'hidden-trump' && <HiddenTrumpPage isHider={room.config.trumpMode === 'hidden'} hiderName="You" hand={mockHand} onConfirm={() => { setTrump(mockTrump); setScreen('game'); }} />}
         {screen === 'game' && <GameTablePage room={room} meId={currentPlayerId} hand={mockHand} playableIds={mockPlayableIds} trick={trick} trump={trump} scores={scores} trickNumber={trickNumber} totalTricks={13} onPlayCard={handlePlayCard} onLeave={handleLeave} onEndGame={() => { setWinningTeam('A'); setScreen('game-end'); }} />}

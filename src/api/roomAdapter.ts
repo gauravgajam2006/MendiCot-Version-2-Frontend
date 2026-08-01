@@ -1,19 +1,25 @@
-import type { RoomState } from '@/types';
-import type { BackendRoomState } from './roomState';
+import type { RoomState, TeamId } from '@/types';
+import type { BackendRoomState, BackendTeamId } from './roomState';
+
+const TEAM_ID_MAP: Record<BackendTeamId, TeamId> = {
+  TeamA: 'A',
+  TeamB: 'B',
+};
 
 /** Converts a backend room snapshot into the shape consumed by the UI. */
 export function adaptRoomState(state: BackendRoomState, currentPlayerId: string): RoomState {
   return {
+    status: state.status,
     config: {
       code: state.room_id.toUpperCase(),
       playerCount: state.player_count,
       trumpMode: state.trump_mode,
     },
-    players: state.players.map((player, index) => ({
+    players: [...state.players].sort((a, b) => a.seat_index - b.seat_index).map((player) => ({
       id: player.player_id,
       displayName: player.display_name,
-      team: index % 2 === 0 ? 'A' : 'B',
-      seatIndex: index,
+      team: TEAM_ID_MAP[player.team_id],
+      seatIndex: player.seat_index,
       isHost: player.player_id === state.host_id,
       isReady: player.is_online,
       connection: player.is_online ? 'online' : 'offline',
