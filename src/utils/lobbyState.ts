@@ -1,6 +1,7 @@
 import type { BackendTeamId } from '../api/roomState';
 import type { WsOutboundMessage } from '../api/websocket';
 import type { Player, RoomState, TeamId } from '../types';
+import { DEFAULT_TEAM_NAMES } from './teamNames.ts';
 
 export interface TeamSwitchControl {
   label: string;
@@ -36,11 +37,15 @@ export function toBackendTeamId(team: TeamId): BackendTeamId {
   return team === 'A' ? 'TeamA' : 'TeamB';
 }
 
-export function getTeamSwitchControl(player: Player, currentPlayerId: string): TeamSwitchControl | null {
+export function getTeamSwitchControl(
+  player: Player,
+  currentPlayerId: string,
+  teamNames: Record<TeamId, string> = DEFAULT_TEAM_NAMES,
+): TeamSwitchControl | null {
   if (player.id !== currentPlayerId || !player.isCurrentPlayer) return null;
   return player.team === 'A'
-    ? { label: 'Switch to Team Gold', targetTeam: 'B' }
-    : { label: 'Switch to Team Maroon', targetTeam: 'A' };
+    ? { label: `Switch to ${teamNames.B}`, targetTeam: 'B' }
+    : { label: `Switch to ${teamNames.A}`, targetTeam: 'A' };
 }
 
 export function createTeamSwitchRequest(

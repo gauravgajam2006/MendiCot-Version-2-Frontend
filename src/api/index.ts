@@ -3,7 +3,7 @@
  */
 
 // Core
-export { BASE_URL, ApiError, request } from './api';
+export { BASE_URL, ApiError, request, resolveBaseUrl } from './api';
 export type { RequestOptions } from './api';
 
 // Room endpoints
@@ -21,9 +21,11 @@ export type { SessionValidationRejectionCode, ValidateRoomSessionResult, Validat
 // Room-state transport and UI adapter
 export { adaptRoomState } from './roomAdapter';
 export type { BackendRoomPlayer, BackendRoomState, BackendTeamId, RoomStateUpdateMessage } from './roomState';
+export { adaptGameState, canSubmitCard, createPlayCardRequest, derivePlayableIds, isBackendGameState, resolveGameplayActionError } from './gameState';
+export type { AuthoritativeGameState, BackendGamePhase, BackendGameState } from './gameState';
 
 // WebSocket
-export { GameSocket } from './websocket';
+export { GameSocket, toWsUrl } from './websocket';
 export type {
   WsOutboundMessage,
   WsInboundMessage,

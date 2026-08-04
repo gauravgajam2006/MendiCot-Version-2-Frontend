@@ -24,7 +24,7 @@
  *   • `send()` accepts a plain object and stringifies it.
  */
 
-import { BASE_URL } from './api';
+import { BASE_URL } from './api.ts';
 
 // ---------------------------------------------------------------------------
 // Message types
@@ -72,9 +72,27 @@ export interface GameSocketCallbacks {
 // WebSocket wrapper
 // ---------------------------------------------------------------------------
 
-/** Derive the WS base from the HTTP base (http→ws, https→wss). */
-function toWsUrl(httpBase: string): string {
-  return httpBase.replace(/^http/, 'ws');
+/**
+ * Derive the WS base from the HTTP base URL.
+ * http://...  -> ws://...
+ * https://... -> wss://...
+ * ws://...    -> ws://...
+ * wss://...   -> wss://...
+ *
+ * Throws an Error for unsupported URL schemes or malformed inputs.
+ */
+export function toWsUrl(httpBase: string): string {
+  const trimmed = httpBase.trim().replace(/\/+$/, '');
+  if (trimmed.startsWith('https://')) {
+    return trimmed.replace(/^https:\/\//, 'wss://');
+  }
+  if (trimmed.startsWith('http://')) {
+    return trimmed.replace(/^http:\/\//, 'ws://');
+  }
+  if (trimmed.startsWith('wss://') || trimmed.startsWith('ws://')) {
+    return trimmed;
+  }
+  throw new Error(`Unsupported API URL scheme for WebSocket conversion: "${httpBase}"`);
 }
 
 export class GameSocket {

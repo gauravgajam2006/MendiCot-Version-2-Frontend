@@ -1,71 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PlayedCard, Player, Suit } from '@/types';
-import { SUIT_IS_RED, SUIT_NAME, SUIT_SYMBOL } from '@/types';
+import type { PlayedCard, Player } from '@/types';
 import { PlayingCard } from './PlayingCard';
+import type { BackendGamePhase } from '@/api';
+import type { TrickLeaderState } from '@/types';
 
 interface CurrentTrickProps {
   cards: PlayedCard[];
-  leadSuit: Suit | null;
+  phase: BackendGamePhase;
+  currentTrickLeader: TrickLeaderState | null;
   players: Player[];
-  currentPlayerId: string;
-  meId: string;
-  trickNumber: number;
-  totalTricks: number;
 }
 
 export function CurrentTrick({
   cards,
-  leadSuit,
+  phase,
+  currentTrickLeader,
   players,
-  currentPlayerId,
-  meId,
-  trickNumber,
-  totalTricks,
 }: CurrentTrickProps) {
-  const playerById = (id: string) => players.find((p) => p.id === id);
-  const isMyTurn = currentPlayerId === meId;
+  const isResolving = phase === 'TRICK_RESOLUTION';
 
   return (
-    <div className="relative flex flex-col items-center justify-center gap-3">
-      {/* Trick progress + lead suit + turn indicator */}
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-ink-600 bg-ink-900/80 px-2.5 py-1">
-          <span className="label-eyebrow text-bone-400">Trick</span>
-          <span className="text-2xs font-semibold tabular-nums text-bone-100">
-            {trickNumber}/{totalTricks}
-          </span>
-        </div>
-        {leadSuit && (
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-ink-600 bg-ink-900/80 px-2.5 py-1">
-            <span className="label-eyebrow text-bone-400">Lead</span>
-            <span className={['font-semibold text-xs', SUIT_IS_RED[leadSuit] ? 'text-crimson-400' : 'text-bone-100'].join(' ')}>
-              {SUIT_SYMBOL[leadSuit]} {SUIT_NAME[leadSuit]}
-            </span>
-          </div>
-        )}
-        <div
-          className={[
-            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.14em] transition-colors',
-            isMyTurn
-              ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40'
-              : 'bg-ink-800 text-bone-300',
-          ].join(' ')}
-        >
-          <span className={['h-1.5 w-1.5 rounded-full', isMyTurn ? 'bg-emerald-400 animate-pulse-soft' : 'bg-bone-400'].join(' ')} />
-          {isMyTurn ? 'Your turn' : `${playerById(currentPlayerId)?.displayName ?? 'Player'}'s turn`}
-        </div>
-      </div>
-
-      {/* Played cards — central controlled overlapping pile */}
-      <div className="relative flex items-center justify-center min-h-[7rem] min-w-0">
+    <div className="relative flex flex-col items-center justify-center">
+      {/* Played cards are intentionally the only central table content. */}
+      <div className="relative flex min-h-[9rem] w-full items-center justify-center min-w-0">
         {cards.length === 0 ? (
-          <div className="text-center px-2">
-            <p className="text-sm text-bone-400">
-              {isMyTurn ? 'Lead the trick — play any card.' : 'Waiting for the first card…'}
+          <div className="max-w-[14rem] px-3 text-center">
+            <p className="text-sm leading-relaxed text-bone-400">
+              Waiting for the first card…
             </p>
           </div>
         ) : (
-          <PlayedPile cards={cards} players={players} />
+          <PlayedPile cards={cards} players={players} winner={isResolving ? currentTrickLeader : null} />
         )}
       </div>
     </div>
@@ -77,7 +42,7 @@ export function CurrentTrick({
 // exposed. The container bounds the exact group width, and the parent centers
 // that container — so the visual center of the group stays stable as cards
 // are added. The newest card sits on top (highest z-index).
-function PlayedPile({ cards, players }: { cards: PlayedCard[]; players: Player[] }) {
+function PlayedPile({ cards, players, winner }: { cards: PlayedCard[]; players: Player[]; winner: TrickLeaderState | null }) {
   const measureRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(400);
 
@@ -116,10 +81,13 @@ function PlayedPile({ cards, players }: { cards: PlayedCard[]; players: Player[]
     <div ref={measureRef} className="flex flex-col items-center gap-2 w-full">
       {/* The container width bounds the whole group; the parent centers it. */}
       <div className="relative mx-auto" style={{ width: pileW, height: CARD_H }}>
-        {cards.map((pc, i) => (
+        {cards.map((pc, i) => {
+          const isWinningCard = winner?.playerId === pc.playerId && winner.card.id === pc.card.id;
+          return (
           <div
             key={pc.playerId}
-            className="absolute top-0 animate-card-play"
+            className={['absolute top-0 animate-card-play rounded-lg', isWinningCard ? 'ring-2 ring-gold-400 ring-offset-2 ring-offset-ink-950' : ''].join(' ')}
+            aria-label={isWinningCard ? `${players.find((player) => player.id === pc.playerId)?.displayName ?? 'Player'} is winning this trick` : undefined}
             style={{
               left: `${i * offsetX}px`,
               zIndex: i + 1,
@@ -127,11 +95,13 @@ function PlayedPile({ cards, players }: { cards: PlayedCard[]; players: Player[]
           >
             <PlayingCard card={pc.card} size="md" state="default" />
           </div>
-        ))}
+          );
+        })}
       </div>
-      <span className="text-2xs text-bone-400 uppercase tracking-wider max-w-[8rem] truncate">
-        {n > 1 ? `${n} cards played · ` : ''}last by {latestPlayer?.displayName ?? 'Player'}
+      <span className="max-w-[12rem] truncate text-2xs uppercase tracking-wider text-bone-400">
+        Last by {latestPlayer?.displayName ?? 'Player'}
       </span>
+      {winner && <span className="text-2xs font-medium uppercase tracking-[0.12em] text-gold-300">Resolving trick · {winner.displayName} wins this trick</span>}
     </div>
   );
 }

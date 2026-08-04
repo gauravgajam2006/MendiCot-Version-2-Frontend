@@ -28,8 +28,6 @@ export function PlayerSeat({
   variant = 'stacked',
 }: PlayerSeatProps) {
   const interactive = onClick !== undefined && !disabled;
-  const teamText = player.team === 'A' ? 'text-emerald-300' : 'text-gold-300';
-  const teamDot = player.team === 'A' ? 'bg-emerald-400' : 'bg-gold-400';
   const nameColor = player.connection === 'offline' ? 'text-bone-400' : 'text-bone-100';
   const avatarRing = isCurrentTurn
     ? 'ring-2 ring-emerald-400/60 ring-offset-2 ring-offset-ink-950 rounded-full'
@@ -51,10 +49,6 @@ export function PlayerSeat({
         <span className="text-2xs text-bone-400 tabular-nums">{player.cardsRemaining ?? 0} cards</span>
       )}
       {label && <span className="text-2xs text-emerald-300">{label}</span>}
-      <span className={['inline-flex items-center gap-1 text-2xs uppercase tracking-[0.1em]', teamText].join(' ')}>
-        <span className={['h-1.5 w-1.5 rounded-full', teamDot].join(' ')} />
-        {player.team === 'A' ? 'Maroon' : 'Gold'}
-      </span>
     </div>
   );
 

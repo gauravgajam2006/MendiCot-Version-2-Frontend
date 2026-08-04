@@ -1,4 +1,4 @@
-import type { Suit, TrumpState } from '@/types';
+import type { TrumpState } from '@/types';
 import { SUIT_IS_RED, SUIT_NAME, SUIT_SYMBOL } from '@/types';
 import { Eye, EyeOff, HelpCircle, Sparkles } from 'lucide-react';
 
@@ -81,7 +81,8 @@ function Shell({
   return (
     <div
       className={[
-        'inline-flex flex-col gap-1 rounded-lg border bg-ink-900/80 px-3 py-2',
+        'inline-flex flex-col gap-1 rounded-lg border bg-ink-900/80',
+        compact ? 'px-2.5 py-1.5' : 'px-3 py-2',
         ring,
         pulse ? 'animate-pulse-soft' : '',
       ].join(' ')}

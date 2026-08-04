@@ -67,7 +67,7 @@ export function Logo({ size = 32, className = '', showMark = true }: LogoProps) 
 export function Wordmark({ size = 28, className = '' }: { size?: number; className?: string }) {
   return (
     <span
-      className="font-display font-semibold tracking-brand leading-none text-bone-50"
+      className={['font-display font-semibold tracking-brand leading-none text-bone-50', className].join(' ')}
       style={{ fontSize: size }}
     >
       Mendi<span className="text-emerald-400">Cot</span>

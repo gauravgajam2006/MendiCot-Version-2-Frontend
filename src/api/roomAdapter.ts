@@ -1,5 +1,6 @@
 import type { RoomState, TeamId } from '@/types';
 import type { BackendRoomState, BackendTeamId } from './roomState';
+import { authoritativeTeamNames } from '../utils/teamNames.ts';
 
 const TEAM_ID_MAP: Record<BackendTeamId, TeamId> = {
   TeamA: 'A',
@@ -7,7 +8,11 @@ const TEAM_ID_MAP: Record<BackendTeamId, TeamId> = {
 };
 
 /** Converts a backend room snapshot into the shape consumed by the UI. */
-export function adaptRoomState(state: BackendRoomState, currentPlayerId: string): RoomState {
+export function adaptRoomState(
+  state: BackendRoomState,
+  currentPlayerId: string,
+  fallbackTeamNames?: RoomState['teams'],
+): RoomState {
   return {
     status: state.status,
     config: {
@@ -26,6 +31,6 @@ export function adaptRoomState(state: BackendRoomState, currentPlayerId: string)
       isCurrentPlayer: player.player_id === currentPlayerId,
     })),
     hostId: state.host_id ?? '',
-    teams: { A: 'Team Maroon', B: 'Team Gold' },
+    teams: authoritativeTeamNames(state.team_names, fallbackTeamNames),
   };
 }

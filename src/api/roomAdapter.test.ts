@@ -76,3 +76,26 @@ test('authoritative room updates move a player and remain stable across refresh 
   assert.equal(reconnected.players.find((player) => player.id === 'me')?.isCurrentPlayer, true);
   assert.equal(reconnected.players.find((player) => player.id === 'host')?.isHost, true);
 });
+
+test('authoritative custom team names survive room adaptation and reconnect', () => {
+  const backend: BackendRoomState = {
+    room_id: 'named123', status: 'IN_GAME', host_id: 'p1', player_count: 4, trump_mode: 'normal',
+    team_names: { TeamA: 'Notorious Squad', TeamB: 'Golden Aces' },
+    players: [
+      { player_id: 'p1', display_name: 'P1', team_id: 'TeamA', seat_index: 0, is_online: true },
+      { player_id: 'p2', display_name: 'P2', team_id: 'TeamB', seat_index: 1, is_online: true },
+    ],
+  };
+  assert.deepEqual(adaptRoomState(backend, 'p1').teams, { A: 'Notorious Squad', B: 'Golden Aces' });
+  assert.deepEqual(adaptRoomState(structuredClone(backend), 'p1').teams, { A: 'Notorious Squad', B: 'Golden Aces' });
+});
+
+test('a legacy snapshot without team_names retains previously authoritative names when supplied as fallback', () => {
+  const backend: BackendRoomState = {
+    room_id: 'named123', status: 'IN_GAME', host_id: 'p1', player_count: 4, trump_mode: 'normal',
+    players: [{ player_id: 'p1', display_name: 'P1', team_id: 'TeamA', seat_index: 0, is_online: true }],
+  };
+  assert.deepEqual(adaptRoomState(backend, 'p1', { A: 'Notorious Squad', B: 'Golden Aces' }).teams, {
+    A: 'Notorious Squad', B: 'Golden Aces',
+  });
+});

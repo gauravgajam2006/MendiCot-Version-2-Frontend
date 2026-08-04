@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { RoomCodeDisplay } from '@/components/ui/RoomCodeDisplay';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusIndicator } from '@/components/ui/StatusIndicator';
-import { TeamBadge } from '@/components/ui/TeamBadge';
+import { InlineTeamName } from '@/components/ui/InlineTeamName';
 import type { BackendTeamId } from '@/api';
 import { getLobbyStartState, getTeamSwitchControl } from '@/utils/lobbyState';
 import type { Player, RoomState, TeamId } from '@/types';
@@ -15,7 +15,11 @@ interface LobbyPageProps {
   pendingTeamSwitch: BackendTeamId | null;
   startPending: boolean;
   actionMessage: string | null;
+  pendingTeamRename: boolean;
+  teamRenameMessage: string | null;
   onSwitchTeam: (targetTeam: TeamId) => void;
+  onRenameTeam: (name: string) => void;
+  onClearTeamRenameMessage: () => void;
   onStart: () => void;
   onLeave: () => void;
 }
@@ -26,7 +30,11 @@ export function LobbyPage({
   pendingTeamSwitch,
   startPending,
   actionMessage,
+  pendingTeamRename,
+  teamRenameMessage,
   onSwitchTeam,
+  onRenameTeam,
+  onClearTeamRenameMessage,
   onStart,
   onLeave,
 }: LobbyPageProps) {
@@ -37,7 +45,7 @@ export function LobbyPage({
   const startState = getLobbyStartState(room, meId);
   const startDisabled = !startState.canStart || pendingTeamSwitch !== null || startPending;
   const switchControl = me && room.status === 'WAITING'
-    ? getTeamSwitchControl(me, meId)
+    ? getTeamSwitchControl(me, meId, room.teams)
     : null;
 
   const teams: TeamId[] = ['A', 'B'];
@@ -120,6 +128,11 @@ export function LobbyPage({
               team={team}
               room={room}
               seats={seatsPerTeam}
+              editable={team === me?.team}
+              renamePending={pendingTeamRename}
+              renameMessage={team === me?.team ? teamRenameMessage : null}
+              onRename={onRenameTeam}
+              onClearRenameMessage={onClearTeamRenameMessage}
             />
           ))}
         </div>
@@ -156,10 +169,20 @@ function TeamPanel({
   team,
   room,
   seats,
+  editable,
+  renamePending,
+  renameMessage,
+  onRename,
+  onClearRenameMessage,
 }: {
   team: TeamId;
   room: RoomState;
   seats: number;
+  editable: boolean;
+  renamePending: boolean;
+  renameMessage: string | null;
+  onRename: (name: string) => void;
+  onClearRenameMessage: () => void;
 }) {
   const teamPlayers = room.players.filter((p) => p.team === team);
   const emptySeats = Math.max(0, seats - teamPlayers.length);
@@ -168,7 +191,15 @@ function TeamPanel({
   return (
     <div className="surface-raised overflow-hidden">
       <div className={['flex items-center justify-between border-b hairline px-4 py-3', isA ? 'bg-emerald-900/20' : 'bg-gold-700/15'].join(' ')}>
-        <TeamBadge team={team} name={room.teams[team]} size="md" />
+        <InlineTeamName
+          team={team}
+          name={room.teams[team]}
+          editable={editable}
+          pending={renamePending && editable}
+          error={renameMessage}
+          onCommit={onRename}
+          onClearError={onClearRenameMessage}
+        />
         <span className="text-2xs text-bone-400 uppercase tracking-wider">
           {teamPlayers.length} / {seats} seated
         </span>

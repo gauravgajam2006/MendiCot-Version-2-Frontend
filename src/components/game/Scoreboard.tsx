@@ -1,8 +1,9 @@
-import type { TeamId } from '@/types';
-import { Crown, Target } from 'lucide-react';
+import type { Suit, TeamId } from '@/types';
+import { Crown } from 'lucide-react';
+import { CapturedMendisSlots } from './CapturedMendisSlots';
 
 interface ScoreboardProps {
-  scores: Record<TeamId, { name: string; tricks: number; tens: number }>;
+  scores: Record<TeamId, { name: string; tricks: number; tens: number; capturedMendis?: Suit[] }>;
   tricksToWin?: number;
   tensToWin?: number;
   compact?: boolean;
@@ -20,6 +21,7 @@ export function Scoreboard({ scores, tricksToWin, tensToWin = 3, compact }: Scor
           name={a.name}
           tricks={a.tricks}
           tens={a.tens}
+          capturedMendis={a.capturedMendis}
           tricksToWin={tricksToWin}
           tensToWin={tensToWin}
           leading={leading === 'A'}
@@ -31,6 +33,7 @@ export function Scoreboard({ scores, tricksToWin, tensToWin = 3, compact }: Scor
           name={b.name}
           tricks={b.tricks}
           tens={b.tens}
+          capturedMendis={b.capturedMendis}
           tricksToWin={tricksToWin}
           tensToWin={tensToWin}
           leading={leading === 'B'}
@@ -46,6 +49,7 @@ function TeamColumn({
   name,
   tricks,
   tens,
+  capturedMendis,
   tricksToWin,
   tensToWin,
   leading,
@@ -55,6 +59,7 @@ function TeamColumn({
   name: string;
   tricks: number;
   tens: number;
+  capturedMendis?: Suit[];
   tricksToWin?: number;
   tensToWin: number;
   leading: boolean;
@@ -68,27 +73,29 @@ function TeamColumn({
   const tensProgress = Math.min(100, (tens / tensToWin) * 100);
 
   return (
-    <div className="flex-1 px-3 py-2.5">
-      <div className="flex items-center gap-1.5">
+    <section className={['flex-1 min-w-0 py-2.5', compact ? 'px-2 sm:px-2.5' : 'px-3'].join(' ')} aria-label={`${name} score`}>
+      <div className="flex min-w-0 items-center justify-center gap-1.5">
         {leading && <Crown size={compact ? 11 : 13} className={accent} />}
-        <span className={['text-2xs font-medium uppercase tracking-[0.14em] truncate', accent].join(' ')}>
+        <span className={['min-w-0 whitespace-nowrap text-center text-2xs font-medium uppercase leading-tight tracking-[0.08em]', accent].join(' ')}>
           {name}
         </span>
       </div>
-      <div className="mt-1.5 flex items-baseline gap-3">
-        <div>
-          <span className={['font-display text-2xl font-semibold tabular-nums', isA ? 'text-emerald-200' : 'text-gold-200'].join(' ')}>
-            {tricks}
-          </span>
-          <span className="ml-1 text-2xs text-bone-400 uppercase tracking-wider">tricks</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Target size={11} className={isA ? 'text-emerald-400' : 'text-gold-400'} />
-          <span className="font-display text-lg font-semibold tabular-nums text-bone-100">
-            {tens}
-          </span>
-          <span className="text-2xs text-bone-400 uppercase tracking-wider">tens</span>
-        </div>
+      <div
+        className={[
+          'mt-2 grid min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-stretch text-center',
+          compact ? 'gap-2' : 'gap-3',
+        ].join(' ')}
+      >
+        <MetricColumn
+          label="Tricks"
+          compact={compact}
+          value={<span className={['font-display font-semibold leading-none tabular-nums', compact ? 'text-xl sm:text-2xl' : 'text-2xl', isA ? 'text-emerald-200' : 'text-gold-200'].join(' ')}>{tricks}</span>}
+        />
+        <MetricColumn
+          label="Mendis"
+          compact={compact}
+          value={<CapturedMendisSlots capturedSuits={capturedMendis} teamName={name} compact={compact} />}
+        />
       </div>
       {tricksToWin && !compact && (
         <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-ink-700">
@@ -100,6 +107,23 @@ function TeamColumn({
           <div className={['h-full rounded-full transition-all duration-500', bar, 'opacity-50'].join(' ')} style={{ width: `${tensProgress}%` }} />
         </div>
       )}
+    </section>
+  );
+}
+
+function MetricColumn({
+  label,
+  value,
+  compact,
+}: {
+  label: string;
+  value: React.ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <div className="grid min-w-0 grid-rows-[1.75rem_auto] items-end">
+      <div className={['flex min-w-0 items-center justify-center', compact ? 'h-6 sm:h-7' : 'h-7'].join(' ')}>{value}</div>
+      <span className="mt-1 block text-2xs font-medium uppercase leading-none tracking-[0.1em] text-bone-400">{label}</span>
     </div>
   );
 }

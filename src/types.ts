@@ -31,7 +31,7 @@ export type PlayerCount = 4 | 6 | 8;
 
 export type TrumpMode = 'normal' | 'hidden';
 
-export type RoomStatus = 'WAITING' | 'IN_GAME';
+export type RoomStatus = 'WAITING' | 'GAME_SETUP' | 'IN_GAME';
 
 export type ConnectionStatus = 'online' | 'offline' | 'connecting';
 
@@ -65,6 +65,13 @@ export type TrumpState =
 export interface PlayedCard {
   playerId: string;
   card: Card;
+}
+
+export interface TrickLeaderState {
+  playerId: string;
+  displayName: string;
+  card: Card;
+  team: TeamId | null;
 }
 
 export interface TrickState {

@@ -26,7 +26,7 @@ export function TeamBadge({ team, name, size = 'sm', leading }: TeamBadgeProps) 
       ].join(' ')}
     >
       <span className={['h-1.5 w-1.5 rounded-full', dot].join(' ')} />
-      {name ?? (isA ? 'Maroon' : 'Gold')}
+      {name ?? (isA ? 'Team Maroon' : 'Team Gold')}
     </span>
   );
 }

@@ -13,8 +13,22 @@
 // Configuration
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolves and normalises the API base URL from environment configuration.
+ *
+ * Defaults to 'http://127.0.0.1:8000' for local development.
+ * Strips trailing slashes and surrounding whitespace.
+ */
+export function resolveBaseUrl(envUrl?: string): string {
+  const trimmed = envUrl?.trim();
+  if (!trimmed) {
+    return 'http://127.0.0.1:8000';
+  }
+  return trimmed.replace(/\/+$/, '');
+}
+
 /** Base URL of the FastAPI backend. */
-export const BASE_URL = 'http://127.0.0.1:8000';
+export const BASE_URL = resolveBaseUrl(import.meta.env?.VITE_API_BASE_URL);
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -88,7 +102,9 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     mergedHeaders['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  const res = await fetch(`${BASE_URL}${normalizedPath}`, {
     method,
     headers: mergedHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,

@@ -1,4 +1,4 @@
-import type { PlayerCount, TrumpMode } from '@/types';
+import type { PlayerCount, RoomStatus, TrumpMode } from '@/types';
 
 export type BackendTeamId = 'TeamA' | 'TeamB';
 
@@ -14,11 +14,12 @@ export interface BackendRoomPlayer {
 /** Room snapshot data as sent by the room WebSocket. */
 export interface BackendRoomState {
   room_id: string;
-  status: 'WAITING' | 'IN_GAME';
+  status: RoomStatus;
   host_id: string | null;
   player_count: PlayerCount;
   trump_mode: TrumpMode;
   players: BackendRoomPlayer[];
+  team_names?: Partial<Record<BackendTeamId, string>>;
 }
 
 /** Initial and subsequent WebSocket room-state events. */

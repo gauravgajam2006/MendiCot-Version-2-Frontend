@@ -1,16 +1,16 @@
-import { RotateCcw, LogOut, Trophy, TrendingUp, Target } from 'lucide-react';
+import { LogOut, Trophy } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { TeamBadge } from '@/components/ui/TeamBadge';
-import type { Player, TeamId } from '@/types';
+import { CapturedMendisSlots } from '@/components/game/CapturedMendisSlots';
+import type { Player, Suit, TeamId } from '@/types';
 
 interface GameEndPageProps {
-  winningTeam: TeamId;
-  scores: Record<TeamId, { name: string; tricks: number; tens: number }>;
+  winningTeam: TeamId | null;
+  scores: Record<TeamId, { name: string; tricks: number; tens: number; capturedMendis: Suit[] }>;
   players: Player[];
   meId: string;
-  onRematch: () => void;
   onLeave: () => void;
 }
 
@@ -19,14 +19,12 @@ export function GameEndPage({
   scores,
   players,
   meId,
-  onRematch,
   onLeave,
 }: GameEndPageProps) {
   const isA = winningTeam === 'A';
-  const winner = scores[winningTeam];
-  const loser = scores[isA ? 'B' : 'A'];
+  const winner = winningTeam ? scores[winningTeam] : null;
   const myTeam = players.find((p) => p.id === meId)?.team;
-  const iWon = myTeam === winningTeam;
+  const iWon = winningTeam !== null && myTeam === winningTeam;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -45,17 +43,17 @@ export function GameEndPage({
           </div>
           <span className="label-eyebrow text-bone-400">Game complete</span>
           <h1 className="mt-2 font-display text-4xl sm:text-5xl font-semibold tracking-tightest text-bone-50">
-            {iWon ? 'Victory' : 'Defeat'}
+            {winningTeam === null ? 'Draw' : iWon ? 'Victory' : 'Defeat'}
           </h1>
           <p className="mt-3 text-bone-300">
-            <span className={isA ? 'text-emerald-300' : 'text-gold-300'}>{winner.name}</span> won the round
+            {winner ? <><span className={isA ? 'text-emerald-300' : 'text-gold-300'}>{winner.name}</span> won the round</> : 'The round ended level'}
           </p>
         </div>
 
         {/* Score summary */}
         <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border hairline bg-ink-700">
-          <TeamResult team="A" name={scores.A.name} tricks={scores.A.tricks} tens={scores.A.tens} won={winningTeam === 'A'} />
-          <TeamResult team="B" name={scores.B.name} tricks={scores.B.tricks} tens={scores.B.tens} won={winningTeam === 'B'} />
+          <TeamResult team="A" name={scores.A.name} tricks={scores.A.tricks} capturedMendis={scores.A.capturedMendis} won={winningTeam === 'A'} />
+          <TeamResult team="B" name={scores.B.name} tricks={scores.B.tricks} capturedMendis={scores.B.capturedMendis} won={winningTeam === 'B'} />
         </div>
 
         {/* Player stats */}
@@ -68,11 +66,11 @@ export function GameEndPage({
                 <div>
                   <p className="text-xs font-medium text-bone-100">{p.displayName}{p.id === meId ? ' (You)' : ''}</p>
                   <div className="mt-1">
-                    <TeamBadge team={p.team} />
+                    <TeamBadge team={p.team} name={scores[p.team].name} />
                   </div>
                 </div>
                 <span className={['text-2xs uppercase tracking-wider', p.team === winningTeam ? 'text-emerald-300' : 'text-bone-400'].join(' ')}>
-                  {p.team === winningTeam ? 'Winner' : 'Runner-up'}
+                  {winningTeam === null ? 'Draw' : p.team === winningTeam ? 'Winner' : 'Runner-up'}
                 </span>
               </div>
             ))}
@@ -81,11 +79,8 @@ export function GameEndPage({
 
         {/* Actions */}
         <div className="mt-8 flex flex-col sm:flex-row items-center gap-3">
-          <Button size="lg" fullWidth onClick={onRematch} className="sm:flex-1">
-            <RotateCcw size={16} /> Rematch
-          </Button>
           <Button size="lg" variant="secondary" fullWidth onClick={onLeave} className="sm:flex-1">
-            <LogOut size={16} /> Return to Lobby
+            <LogOut size={16} /> Leave table
           </Button>
         </div>
       </div>
@@ -97,13 +92,13 @@ function TeamResult({
   team,
   name,
   tricks,
-  tens,
+  capturedMendis,
   won,
 }: {
   team: TeamId;
   name: string;
   tricks: number;
-  tens: number;
+  capturedMendis: Suit[];
   won: boolean;
 }) {
   const isA = team === 'A';
@@ -113,19 +108,23 @@ function TeamResult({
         {won && <Trophy size={16} className={isA ? 'text-emerald-300' : 'text-gold-300'} />}
         <TeamBadge team={team} name={name} size="md" leading={won} />
       </div>
-      <div className="mt-4 flex items-center justify-center gap-4 sm:gap-6">
-        <div className="flex flex-col items-center">
-          <TrendingUp size={15} className={isA ? 'text-emerald-400' : 'text-gold-400'} />
-          <span className="mt-1 font-display text-3xl font-semibold tabular-nums text-bone-50">{tricks}</span>
-          <span className="text-2xs uppercase tracking-wider text-bone-400">Tricks</span>
-        </div>
-        <div className="h-10 w-px bg-ink-600" />
-        <div className="flex flex-col items-center">
-          <Target size={15} className={isA ? 'text-emerald-400' : 'text-gold-400'} />
-          <span className="mt-1 font-display text-3xl font-semibold tabular-nums text-bone-50">{tens}</span>
-          <span className="text-2xs uppercase tracking-wider text-bone-400">Tens</span>
-        </div>
+      <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-end gap-3 text-center">
+        <ResultMetric label="Tricks">
+          <span className="font-display text-3xl font-semibold leading-none tabular-nums text-bone-50">{tricks}</span>
+        </ResultMetric>
+        <ResultMetric label="Mendis">
+          <CapturedMendisSlots capturedSuits={capturedMendis} teamName={name} />
+        </ResultMetric>
       </div>
+    </div>
+  );
+}
+
+function ResultMetric({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid min-w-0 grid-rows-[1.75rem_auto] items-end">
+      <div className="flex h-7 min-w-0 items-center justify-center">{children}</div>
+      <span className="mt-1 block text-2xs font-medium uppercase leading-none tracking-[0.1em] text-bone-400">{label}</span>
     </div>
   );
 }
