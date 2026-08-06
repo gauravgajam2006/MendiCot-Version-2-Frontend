@@ -72,3 +72,33 @@ test('recoverable setup errors stay inline and restore the relevant control', ()
     'Could not select the first player. Please try again.',
   );
 });
+
+test('individual return routing sends only the returned player to the post-game lobby', () => {
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'GAME_OVER', 'p2', ['p2']), 'post-game-lobby');
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'DRAW', 'p4', ['p2', 'p4']), 'post-game-lobby');
+});
+
+test('non-returned players stay on the result screen during the mixed post-game state', () => {
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'GAME_OVER', 'p1', ['p2']), 'game-end');
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'DRAW', 'p3', ['p2']), 'game-end');
+});
+
+test('host and non-host route identically based only on the returned ids', () => {
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'GAME_OVER', 'p1', ['p1']), 'post-game-lobby');
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'GAME_OVER', 'p1', ['p2']), 'game-end');
+});
+
+test('an empty returned list keeps every client on the result screen', () => {
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'GAME_OVER', 'p1', []), 'game-end');
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'DRAW', 'p2', []), 'game-end');
+});
+
+test('authoritative WAITING still routes every client to the normal lobby after a partial return', () => {
+  assert.equal(screenForAuthoritativeState('WAITING', null, 'p2', ['p2']), 'lobby');
+  assert.equal(screenForAuthoritativeState('WAITING', null, 'p1', ['p2']), 'lobby');
+});
+
+test('non-terminal phases ignore returned ids and route by phase alone', () => {
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'PLAYING', 'p2', ['p2']), 'game');
+  assert.equal(screenForAuthoritativeState('IN_GAME', 'FINAL_SCORE_DISPLAY', 'p2', ['p2']), 'game');
+});

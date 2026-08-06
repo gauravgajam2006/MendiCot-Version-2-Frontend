@@ -30,6 +30,7 @@ export interface BackendGameState {
   selected_first_player_id?: string | null;
   selected_trump_hider_id?: string | null;
   hidden_hand_positions?: number[] | null;
+  returned_to_lobby_player_ids?: string[];
 }
 
 export interface AuthoritativeGameState {
@@ -49,6 +50,7 @@ export interface AuthoritativeGameState {
   trumpHiderId: string | null;
   hiddenCardIndex: number | null;
   selectableHiddenPositions: number[];
+  returnedToLobbyPlayerIds: string[];
 }
 
 const SUITS: Record<BackendSuit, Card['suit']> = { SPADES: 'spades', HEARTS: 'hearts', DIAMONDS: 'diamonds', CLUBS: 'clubs' };
@@ -75,7 +77,11 @@ export function isBackendGameState(value: unknown): value is BackendGameState {
       && typeof state.current_trick_leader.display_name === 'string'
       && !!state.current_trick_leader.card
     ))
-    && (state.room_status === 'GAME_SETUP' || state.room_status === 'IN_GAME');
+    && (state.room_status === 'GAME_SETUP' || state.room_status === 'IN_GAME')
+    && (state.returned_to_lobby_player_ids === undefined || (
+      Array.isArray(state.returned_to_lobby_player_ids)
+      && state.returned_to_lobby_player_ids.every((id) => typeof id === 'string')
+    ));
 }
 
 function adaptCard(card: BackendCard): Card {
@@ -193,5 +199,12 @@ export function adaptGameState(
     trump, scores, trickNumber: Math.min(state.completed_tricks.length + 1, dealt), totalTricks: dealt, players, winner,
     trumpHiderId: state.trump_state.trump_hider_id, hiddenCardIndex: state.trump_state.hidden_card_index,
     selectableHiddenPositions,
+    returnedToLobbyPlayerIds: isStringArray(state.returned_to_lobby_player_ids)
+      ? [...state.returned_to_lobby_player_ids]
+      : [],
   };
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }

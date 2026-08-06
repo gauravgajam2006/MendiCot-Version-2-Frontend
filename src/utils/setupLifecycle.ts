@@ -20,6 +20,8 @@ export function isBackendGamePhase(value: unknown): value is BackendGamePhase {
 export function screenForAuthoritativeState(
   roomStatus: RoomStatus,
   phase: BackendGamePhase | null,
+  meId?: string,
+  returnedToLobbyPlayerIds?: string[],
 ): GameScreen | null {
   if (roomStatus === 'WAITING') return 'lobby';
   if (roomStatus === 'GAME_SETUP' || phase === 'FIRST_PLAYER_SELECTION') {
@@ -27,7 +29,10 @@ export function screenForAuthoritativeState(
   }
   if (phase === 'CREATED') return null;
   if (phase === 'HIDDEN_TRUMP_SELECTION' || phase === 'HIDDEN_TRUMP_REVEAL') return 'hidden-trump';
-  if (phase === 'GAME_OVER' || phase === 'DRAW') return 'game-end';
+  if (phase === 'GAME_OVER' || phase === 'DRAW') {
+    if (meId !== undefined && returnedToLobbyPlayerIds?.includes(meId)) return 'post-game-lobby';
+    return 'game-end';
+  }
   return 'game';
 }
 

@@ -89,7 +89,8 @@ export type GameScreen =
   | 'host-setup'
   | 'hidden-trump'
   | 'game'
-  | 'game-end';
+  | 'game-end'
+  | 'post-game-lobby';
 
 export interface RoomConfig {
   code: string;
@@ -103,6 +104,7 @@ export interface RoomState {
   players: Player[];
   hostId: string;
   teams: Record<TeamId, string>; // team id -> team name
+  returnedToLobbyPlayerIds: string[];
 }
 
 export interface ToastMessage {

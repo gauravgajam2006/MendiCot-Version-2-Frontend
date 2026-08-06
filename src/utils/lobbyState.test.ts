@@ -45,6 +45,7 @@ function makeRoom(
     })),
     hostId,
     teams: { A: 'Team Maroon', B: 'Team Gold' },
+    returnedToLobbyPlayerIds: [],
   };
 }
 

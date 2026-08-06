@@ -32,5 +32,12 @@ export function adaptRoomState(
     })),
     hostId: state.host_id ?? '',
     teams: authoritativeTeamNames(state.team_names, fallbackTeamNames),
+    returnedToLobbyPlayerIds: isStringArray(state.returned_to_lobby_player_ids)
+      ? [...state.returned_to_lobby_player_ids]
+      : [],
   };
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }

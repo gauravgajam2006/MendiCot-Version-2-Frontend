@@ -12,6 +12,7 @@ const room: RoomState = {
   config: { code: 'ABCD1234', playerCount: 4, trumpMode: 'normal' },
   hostId: 'p1',
   teams: { A: 'Team Maroon', B: 'Team Gold' },
+  returnedToLobbyPlayerIds: [],
   players: ids.map((id, seatIndex) => ({
     id, displayName: `Player ${seatIndex + 1}`, team: seatIndex % 2 === 0 ? 'A' : 'B', seatIndex,
     isHost: id === 'p1', isReady: true, connection: 'online', isCurrentPlayer: id === 'p1',
@@ -241,6 +242,16 @@ test('final-score display keeps the table authoritative, disables plays, and ret
   assert.equal(screenForAuthoritativeState('IN_GAME', gameOver.phase), 'game-end');
   assert.deepEqual(gameOver.scores, final.scores);
   assert.equal(screenForAuthoritativeState('IN_GAME', 'DRAW'), 'game-end');
+});
+
+test('terminal snapshots carry the authoritative returned_to_lobby_player_ids without synthesis', () => {
+  const state = adaptGameState(snapshot({
+    phase: 'GAME_OVER',
+    returned_to_lobby_player_ids: ['p2'],
+  }), room, 'p1');
+  assert.deepEqual(state.returnedToLobbyPlayerIds, ['p2']);
+  const absent = adaptGameState(snapshot({ phase: 'DRAW' }), room, 'p1');
+  assert.deepEqual(absent.returnedToLobbyPlayerIds, []);
 });
 
 test('resolution display is backend-timed, winner-highlighted, and routes to results only after the later terminal snapshot', () => {

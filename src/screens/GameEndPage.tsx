@@ -1,4 +1,4 @@
-import { LogOut, Trophy } from 'lucide-react';
+import { ArrowLeftToLine, LogOut, Trophy } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
@@ -11,6 +11,9 @@ interface GameEndPageProps {
   scores: Record<TeamId, { name: string; tricks: number; tens: number; capturedMendis: Suit[] }>;
   players: Player[];
   meId: string;
+  onReturnToLobby: () => void;
+  returnToLobbyPending: boolean;
+  returnToLobbyError: string | null;
   onLeave: () => void;
 }
 
@@ -19,6 +22,9 @@ export function GameEndPage({
   scores,
   players,
   meId,
+  onReturnToLobby,
+  returnToLobbyPending,
+  returnToLobbyError,
   onLeave,
 }: GameEndPageProps) {
   const isA = winningTeam === 'A';
@@ -78,10 +84,42 @@ export function GameEndPage({
         </div>
 
         {/* Actions */}
-        <div className="mt-8 flex flex-col sm:flex-row items-center gap-3">
-          <Button size="lg" variant="secondary" fullWidth onClick={onLeave} className="sm:flex-1">
-            <LogOut size={16} /> Leave table
-          </Button>
+        <div className="mt-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+            <Button
+              size="lg"
+              variant="primary"
+              fullWidth
+              className="sm:flex-1"
+              onClick={onReturnToLobby}
+              disabled={returnToLobbyPending}
+              loading={returnToLobbyPending}
+            >
+              <ArrowLeftToLine size={16} /> {returnToLobbyPending ? 'Returning…' : 'Return to Lobby'}
+            </Button>
+            <Button
+              size="lg"
+              variant="danger"
+              fullWidth
+              className="sm:flex-1"
+              onClick={onLeave}
+            >
+              <LogOut size={16} /> Leave Table
+            </Button>
+          </div>
+          {returnToLobbyPending && (
+            <p role="status" className="mt-4 text-center text-sm text-bone-300">
+              Returning to lobby…
+            </p>
+          )}
+          {returnToLobbyError && (
+            <p
+              role="alert"
+              className="mt-4 w-full rounded-lg border border-crimson-500/40 bg-crimson-500/10 px-3 py-2 text-center text-sm text-crimson-400"
+            >
+              {returnToLobbyError}
+            </p>
+          )}
         </div>
       </div>
     </div>

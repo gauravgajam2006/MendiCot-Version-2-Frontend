@@ -9,6 +9,7 @@ import { HostSetupPage } from '@/screens/HostSetupPage';
 import { HiddenTrumpPage } from '@/screens/HiddenTrumpPage';
 import { GameTablePage } from '@/screens/GameTablePage';
 import { GameEndPage } from '@/screens/GameEndPage';
+import { PostGameLobbyPage } from '@/screens/PostGameLobbyPage';
 import { ErrorScreen, ConnectingScreen } from '@/screens/ErrorScreens';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { adaptGameState, adaptRoomState, ApiError, canSubmitCard, createPlayCardRequest, createRoom, derivePlayableIds, GameSocket, isBackendGameState, joinRoom, resolveGameplayActionError, validateBeforeOpeningSocket, validateRoomSession } from '@/api';
@@ -44,6 +45,7 @@ import {
   screenForAuthoritativeState,
   shouldAcceptGamePhase,
 } from '@/utils/setupLifecycle';
+import { createReturnToLobbyRequest, isPlayerReturnedToLobby, resolveReturnToLobbyError } from '@/utils/returnToLobby';
 import type { Card, GameScreen, PlayerCount, ReconnectState, RoomState, TeamId, TrumpMode } from '@/types';
 
 const NO_PLAYER_ID = '';
@@ -88,6 +90,7 @@ function createInitialRoomState(): RoomState {
     players: [],
     hostId: '',
     teams: { A: 'Team Maroon', B: 'Team Gold' },
+    returnedToLobbyPlayerIds: [],
   };
 }
 
@@ -121,6 +124,9 @@ function App() {
   const [gameState, setGameState] = useState<AuthoritativeGameState | null>(null);
   const [gameplayPending, setGameplayPending] = useState(false);
   const [gameplayMessage, setGameplayMessage] = useState<string | null>(null);
+  const [returnToLobbyPending, setReturnToLobbyPending] = useState(false);
+  const [returnToLobbyError, setReturnToLobbyError] = useState<string | null>(null);
+  const [returnedToLobbyPlayerIds, setReturnedToLobbyPlayerIds] = useState<string[]>([]);
 
   const socketRef = useRef<GameSocket | null>(null);
   const isLeavingRef = useRef(false);
@@ -145,6 +151,8 @@ function App() {
   const firstPlayerPendingRef = useRef(false);
   const setupPhaseRef = useRef<BackendGamePhase | null>(null);
   const latestGameStateVersionRef = useRef(-1);
+  const returnToLobbyPendingRef = useRef(false);
+  const returnedToLobbyPlayerIdsRef = useRef<string[]>([]);
 
   useEffect(() => { roomRef.current = room; }, [room]);
 
@@ -169,6 +177,9 @@ function App() {
     setStartPending(false);
     setCancelSetupPending(false);
     setFirstPlayerPending(false);
+    returnToLobbyPendingRef.current = false;
+    setReturnToLobbyPending(false);
+    setReturnToLobbyError(null);
     if (clearMessage) setLobbyActionMessage(null);
     if (clearMessage) setTeamRenameMessage(null);
   }, []);
@@ -203,6 +214,8 @@ function App() {
     setGameState(null);
     setGameplayPending(false);
     setGameplayMessage(null);
+    returnedToLobbyPlayerIdsRef.current = [];
+    setReturnedToLobbyPlayerIds([]);
     setReconnect('connected');
   }, [cancelSessionValidation, closeActiveSocket]);
 
@@ -283,6 +296,28 @@ function App() {
           return;
         }
         if (message.type === 'ERROR') {
+          const returnToLobbyError = resolveReturnToLobbyError(message.payload, returnToLobbyPendingRef.current);
+          if (returnToLobbyError) {
+            if (roomRef.current.status === 'WAITING') {
+              returnToLobbyPendingRef.current = false;
+              setReturnToLobbyPending(false);
+              setReturnToLobbyError(null);
+              setScreen('lobby');
+              return;
+            }
+            const terminalPhase = setupPhaseRef.current === 'GAME_OVER' || setupPhaseRef.current === 'DRAW';
+            if (isPlayerReturnedToLobby(currentPlayerIdRef.current, returnedToLobbyPlayerIdsRef.current)) {
+              returnToLobbyPendingRef.current = false;
+              setReturnToLobbyPending(false);
+              setReturnToLobbyError(null);
+              if (terminalPhase) setScreen('post-game-lobby');
+              return;
+            }
+            returnToLobbyPendingRef.current = false;
+            setReturnToLobbyPending(false);
+            setReturnToLobbyError(returnToLobbyError);
+            return;
+          }
           const gameplayError = resolveGameplayActionError(message.payload);
           if (gameplayError) {
             gameplayPendingVersionRef.current = null;
@@ -356,6 +391,9 @@ function App() {
           }
           gameStateRef.current = adapted;
           setGameState(adapted);
+          const returnedIds = adapted.returnedToLobbyPlayerIds;
+          returnedToLobbyPlayerIdsRef.current = returnedIds;
+          setReturnedToLobbyPlayerIds(returnedIds);
           if (gameplayPendingVersionRef.current !== null && version > gameplayPendingVersionRef.current) {
             gameplayPendingVersionRef.current = null;
             setGameplayPending(false);
@@ -373,7 +411,13 @@ function App() {
             firstPlayerPendingRef.current = false;
             setFirstPlayerPending(false);
           }
-          const nextScreen = screenForAuthoritativeState(gameState.room_status, gameState.phase);
+          if ((gameState.phase === 'GAME_OVER' || gameState.phase === 'DRAW')
+            && isPlayerReturnedToLobby(session.playerId, returnedIds)) {
+            returnToLobbyPendingRef.current = false;
+            setReturnToLobbyPending(false);
+            setReturnToLobbyError(null);
+          }
+          const nextScreen = screenForAuthoritativeState(gameState.room_status, gameState.phase, session.playerId, returnedIds);
           if (nextScreen) setScreen(nextScreen);
           setLobbyActionMessage(null);
           return;
@@ -406,6 +450,18 @@ function App() {
           message.payload.team_names,
         );
         const authoritativeStatus = message.payload.status;
+        const rawReturnedIds = message.payload.returned_to_lobby_player_ids;
+        const returnedIds = Array.isArray(rawReturnedIds) && rawReturnedIds.every((id) => typeof id === 'string')
+          ? [...rawReturnedIds]
+          : returnedToLobbyPlayerIdsRef.current;
+        returnedToLobbyPlayerIdsRef.current = returnedIds;
+        setReturnedToLobbyPlayerIds(returnedIds);
+        const terminalPhase = setupPhaseRef.current === 'GAME_OVER' || setupPhaseRef.current === 'DRAW';
+        if (terminalPhase && isPlayerReturnedToLobby(session.playerId, returnedIds)) {
+          returnToLobbyPendingRef.current = false;
+          setReturnToLobbyPending(false);
+          setReturnToLobbyError(null);
+        }
         const startConfirmed = startPendingRef.current && authoritativeStatus === 'GAME_SETUP';
         const cancelConfirmed = cancelSetupPendingRef.current && authoritativeStatus === 'WAITING';
         const firstPlayerConfirmed = firstPlayerPendingRef.current && authoritativeStatus === 'IN_GAME';
@@ -443,6 +499,17 @@ function App() {
           setSetupPhase(null);
           setCancelSetupPending(false);
           setFirstPlayerPending(false);
+          latestGameStateVersionRef.current = -1;
+          gameStateRef.current = null;
+          gameplayPendingVersionRef.current = null;
+          setGameState(null);
+          setGameplayPending(false);
+          setGameplayMessage(null);
+          returnToLobbyPendingRef.current = false;
+          setReturnToLobbyPending(false);
+          setReturnToLobbyError(null);
+          returnedToLobbyPlayerIdsRef.current = [];
+          setReturnedToLobbyPlayerIds([]);
         }
 
         receivedRoomState = true;
@@ -471,6 +538,8 @@ function App() {
         const nextScreen = screenForAuthoritativeState(
           authoritativeStatus,
           authoritativeStatus === 'IN_GAME' ? setupPhaseRef.current : null,
+          session.playerId,
+          returnedIds,
         );
         if (nextScreen) setScreen(nextScreen);
         setRestorationState('idle');
@@ -887,6 +956,20 @@ function App() {
     socket.send(createPlayCardRequest(card));
   };
 
+  const handleReturnToLobby = () => {
+    const socket = socketRef.current;
+    const request = createReturnToLobbyRequest(returnToLobbyPendingRef.current);
+    if (!request) return;
+    if (!socket?.isConnected) {
+      setReturnToLobbyError('Could not return to the lobby. Please try again.');
+      return;
+    }
+    returnToLobbyPendingRef.current = true;
+    setReturnToLobbyPending(true);
+    setReturnToLobbyError(null);
+    socket.send(request);
+  };
+
   const sendGameplayAction = (action: 'REVEAL_TRUMP' | 'SELECT_TRUMP_HIDER' | 'COMPLETE_TRUMP_SETUP' | 'SELECT_HIDDEN_TRUMP', payload: Record<string, unknown> = {}) => {
     const socket = socketRef.current;
     const state = gameStateRef.current;
@@ -977,7 +1060,17 @@ function App() {
           />
         )}
         {screen === 'game' && gameState && <GameTablePage room={gameRoom} meId={currentPlayerId} phase={gameState.phase} hand={gameState.hand} playableIds={playableIds} trick={{ ...gameState.trick, currentPlayerId: gameState.currentTurn }} currentTrickLeader={gameState.currentTrickLeader} trump={gameState.trump} trumpHiderId={gameState.trumpHiderId} scores={gameState.scores} trickNumber={gameState.trickNumber} totalTricks={gameState.totalTricks} pending={gameplayPending} message={gameplayMessage} onPlayCard={handlePlayCard} onRevealTrump={() => sendGameplayAction('REVEAL_TRUMP')} onLeave={handleLeave} />}
-        {screen === 'game-end' && gameState && <GameEndPage winningTeam={gameState.winner} scores={gameState.scores} players={gameState.players} meId={currentPlayerId} onLeave={handleLeave} />}
+        {screen === 'post-game-lobby' && gameState && (
+          <PostGameLobbyPage
+            roomCode={room.config.code}
+            players={gameState.players}
+            meId={currentPlayerId}
+            returnedToLobbyPlayerIds={returnedToLobbyPlayerIds}
+            teamNames={room.teams}
+            onLeave={handleLeave}
+          />
+        )}
+        {screen === 'game-end' && gameState && <GameEndPage winningTeam={gameState.winner} scores={gameState.scores} players={gameState.players} meId={currentPlayerId} onReturnToLobby={handleReturnToLobby} returnToLobbyPending={returnToLobbyPending} returnToLobbyError={returnToLobbyError} onLeave={handleLeave} />}
       </div>
     </>
   );

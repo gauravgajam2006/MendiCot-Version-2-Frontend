@@ -20,6 +20,7 @@ export interface BackendRoomState {
   trump_mode: TrumpMode;
   players: BackendRoomPlayer[];
   team_names?: Partial<Record<BackendTeamId, string>>;
+  returned_to_lobby_player_ids?: string[];
 }
 
 /** Initial and subsequent WebSocket room-state events. */

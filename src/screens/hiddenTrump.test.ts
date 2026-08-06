@@ -10,6 +10,7 @@ const room: RoomState = {
   config: { code: 'ABCD1234', playerCount: 4, trumpMode: 'hidden' },
   hostId: 'p1',
   teams: { A: 'Team Maroon', B: 'Team Gold' },
+  returnedToLobbyPlayerIds: [],
   players: ids.map((id, seatIndex) => ({
     id, displayName: `Player ${seatIndex + 1}`, team: seatIndex % 2 === 0 ? 'A' : 'B', seatIndex,
     isHost: id === 'p1', isReady: true, connection: 'online', isCurrentPlayer: id === 'p1',

@@ -99,3 +99,20 @@ test('a legacy snapshot without team_names retains previously authoritative name
     A: 'Notorious Squad', B: 'Golden Aces',
   });
 });
+
+test('room adapter carries authoritative returned_to_lobby_player_ids and defaults to an empty list', () => {
+  const backend: BackendRoomState = {
+    room_id: 'return123', status: 'IN_GAME', host_id: 'p1', player_count: 4, trump_mode: 'normal',
+    returned_to_lobby_player_ids: ['p2'],
+    players: [
+      { player_id: 'p1', display_name: 'P1', team_id: 'TeamA', seat_index: 0, is_online: true },
+      { player_id: 'p2', display_name: 'P2', team_id: 'TeamB', seat_index: 1, is_online: true },
+      { player_id: 'p3', display_name: 'P3', team_id: 'TeamA', seat_index: 2, is_online: true },
+      { player_id: 'p4', display_name: 'P4', team_id: 'TeamB', seat_index: 3, is_online: true },
+    ],
+  };
+  assert.deepEqual(adaptRoomState(backend, 'p2').returnedToLobbyPlayerIds, ['p2']);
+  const withoutField: BackendRoomState = { ...backend };
+  delete withoutField.returned_to_lobby_player_ids;
+  assert.deepEqual(adaptRoomState(withoutField, 'p2').returnedToLobbyPlayerIds, []);
+});
