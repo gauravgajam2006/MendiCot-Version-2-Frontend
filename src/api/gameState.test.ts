@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { adaptGameState, canSubmitCard, createPlayCardRequest, derivePlayableIds, resolveGameplayActionError } from './gameState.ts';
+import { adaptGameState, canSubmitCard, createPlayCardRequest, derivePlayableIds, isBackendGameState, resolveGameplayActionError } from './gameState.ts';
 import type { BackendCard, BackendGameState } from './gameState.ts';
 import type { RoomState } from '../types.ts';
 import { screenForAuthoritativeState } from '../utils/setupLifecycle.ts';
@@ -33,7 +33,7 @@ function snapshot(overrides: Partial<BackendGameState> = {}): BackendGameState {
       TeamA: { team_id: 'TeamA', player_ids: ['p1', 'p3'], captured_cards: [], tricks_won: 0, tens_captured: 0 },
       TeamB: { team_id: 'TeamB', player_ids: ['p2', 'p4'], captured_cards: [], tricks_won: 0, tens_captured: 0 },
     },
-    seat_order: ids, hands: { p1: hand }, phase: 'PLAYING', current_turn: 'p1', current_player_id: 'p1',
+    seat_order: ids, hands: { p1: hand }, hand_counts: { p1: 12, p2: 12, p3: 12, p4: 12 }, phase: 'PLAYING', current_turn: 'p1', current_player_id: 'p1',
     current_trick: { lead_player_id: null, lead_suit: null, played_cards: [], winner_player_id: null, completed: false },
     current_trick_leader: null,
     completed_tricks: [], trump_state: { status: 'NONE', suit: null, hidden_rank: null, hidden_card_index: null, trump_hider_id: null },
@@ -55,6 +55,47 @@ test('initial 4-player view is entirely backend-driven', () => {
     B: { name: 'Team Gold', tricks: 0, tens: 0, capturedMendis: [] },
   });
   assert.deepEqual(state.players.map((player) => player.cardsRemaining), [12, 12, 12, 12]);
+});
+
+test('pre-deal Normal and Hidden setup snapshots accept the backend empty hand-count map', () => {
+  const normalSetup = snapshot({
+    phase: 'FIRST_PLAYER_SELECTION', room_status: 'GAME_SETUP', hands: {}, hand_counts: {}, current_turn: null, current_player_id: null,
+  });
+  const hiddenSetup = structuredClone(normalSetup);
+  hiddenSetup.hidden_trump_mode = true;
+
+  for (const setup of [normalSetup, hiddenSetup]) {
+    assert.equal(isBackendGameState(setup), true);
+    assert.equal(screenForAuthoritativeState(setup.room_status, setup.phase), 'host-setup');
+    assert.deepEqual(adaptGameState(setup, room, 'p1').players.map((player) => player.cardsRemaining), [0, 0, 0, 0]);
+  }
+});
+
+test('dealt setup and gameplay require complete authoritative hand counts', () => {
+  const hiddenSetup = snapshot({
+    phase: 'HIDDEN_TRUMP_SELECTION', hidden_trump_mode: true, room_status: 'IN_GAME', current_turn: null, current_player_id: null,
+  });
+  assert.equal(isBackendGameState(hiddenSetup), true);
+  assert.equal(screenForAuthoritativeState(hiddenSetup.room_status, hiddenSetup.phase), 'hidden-trump');
+  assert.equal(isBackendGameState({ ...snapshot(), hand_counts: undefined }), false);
+  assert.equal(isBackendGameState({ ...snapshot(), hand_counts: { p1: 12, p2: 12, p3: 12, p4: 1.5 } }), false);
+  assert.equal(isBackendGameState({ ...snapshot(), hand_counts: {} }), false);
+});
+
+test('opponent seats render backend-authoritative hand counts', () => {
+  const hidden = adaptGameState(snapshot({
+    hidden_trump_mode: true,
+    hands: { p2: hand },
+    hand_counts: { p1: 11, p2: 12, p3: 12, p4: 12 },
+  }), room, 'p2');
+  assert.deepEqual(hidden.players.map((player) => player.cardsRemaining), [11, 12, 12, 12]);
+
+  const returned = adaptGameState(snapshot({
+    hidden_trump_mode: true,
+    hands: { p2: hand },
+    hand_counts: { p1: 10, p2: 11, p3: 12, p4: 12 },
+  }), room, 'p2', hidden);
+  assert.deepEqual(returned.players.map((player) => player.cardsRemaining), [10, 11, 12, 12]);
 });
 
 test('PLAY_CARD uses the exact backend payload and never mutates local state', () => {

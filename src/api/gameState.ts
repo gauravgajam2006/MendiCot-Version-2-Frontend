@@ -15,6 +15,11 @@ export interface BackendGameState {
   captured_mendis?: Record<'TeamA' | 'TeamB', BackendSuit[]>;
   seat_order: string[];
   hands: Record<string, BackendCard[] | undefined>;
+  /**
+   * Public playable-hand sizes. The pre-deal setup snapshot deliberately
+   * carries an empty map because no player has a playable hand yet.
+   */
+  hand_counts?: Record<string, number>;
   phase: BackendGamePhase;
   current_turn: string | null;
   current_player_id: string | null;
@@ -56,12 +61,28 @@ export interface AuthoritativeGameState {
 const SUITS: Record<BackendSuit, Card['suit']> = { SPADES: 'spades', HEARTS: 'hearts', DIAMONDS: 'diamonds', CLUBS: 'clubs' };
 const BACKEND_SUITS = new Set<BackendSuit>(['SPADES', 'HEARTS', 'DIAMONDS', 'CLUBS']);
 const RANKS: Record<number, Card['rank']> = { 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
+const GAME_PHASES = new Set<BackendGamePhase>([
+  'CREATED', 'FIRST_PLAYER_SELECTION', 'DEALING', 'HIDDEN_TRUMP_SELECTION',
+  'HIDDEN_TRUMP_REVEAL', 'TRUMP_REVEAL_DISPLAY', 'HIDDEN_CARD_RETURN',
+  'PLAYING', 'TRICK_RESOLUTION', 'FINAL_SCORE_DISPLAY', 'GAME_OVER', 'DRAW',
+]);
+const PRE_DEAL_PHASES = new Set<BackendGamePhase>(['CREATED', 'FIRST_PLAYER_SELECTION', 'DEALING']);
+
+function hasValidHandCounts(state: Partial<BackendGameState>): boolean {
+  const isPreDeal = PRE_DEAL_PHASES.has(state.phase as BackendGamePhase);
+  if (!state.hand_counts || typeof state.hand_counts !== 'object') return isPreDeal;
+  if (isPreDeal && Object.keys(state.hand_counts).length === 0) return true;
+  return state.seat_order?.every((playerId) => typeof state.hand_counts?.[playerId] === 'number'
+    && Number.isInteger(state.hand_counts[playerId]) && state.hand_counts[playerId] >= 0) ?? false;
+}
 
 export function isBackendGameState(value: unknown): value is BackendGameState {
   if (!value || typeof value !== 'object') return false;
   const state = value as Partial<BackendGameState>;
   return typeof state.game_id === 'string' && (state.player_count === 4 || state.player_count === 6 || state.player_count === 8)
-    && typeof state.version === 'number' && Array.isArray(state.seat_order) && !!state.hands && typeof state.hands === 'object'
+    && typeof state.version === 'number' && Array.isArray(state.seat_order) && state.seat_order.every((playerId) => typeof playerId === 'string')
+    && !!state.hands && typeof state.hands === 'object' && GAME_PHASES.has(state.phase as BackendGamePhase)
+    && hasValidHandCounts(state)
     && !!state.current_trick && Array.isArray(state.current_trick.played_cards) && Array.isArray(state.completed_tricks)
     && !!state.teams && !!state.trump_state && typeof state.phase === 'string'
     && (state.captured_mendis === undefined || (
@@ -128,8 +149,6 @@ export function adaptGameState(
   meId: string,
   previousState?: AuthoritativeGameState | null,
 ): AuthoritativeGameState {
-  const cardsPlayedBy = new Map<string, number>();
-  for (const trick of [...state.completed_tricks, state.current_trick]) for (const played of trick.played_cards) cardsPlayedBy.set(played.player_id, (cardsPlayedBy.get(played.player_id) ?? 0) + 1);
   const dealt = 48 / state.player_count;
   const roomPlayersById = new Map(room.players.map((player) => [player.id, player]));
   const players: Player[] = state.players.map((player) => {
@@ -144,9 +163,9 @@ export function adaptGameState(
       isReady: isOnline,
       connection: isOnline ? 'online' : 'offline',
       isCurrentPlayer: player.player_id === meId,
-      cardsRemaining: player.player_id === meId
-        ? (state.hands[meId]?.length ?? 0)
-        : Math.max(0, dealt - (cardsPlayedBy.get(player.player_id) ?? 0)),
+      // Counts are only absent before dealing, when no player has cards to
+      // display. Never derive a gameplay count from tricks or deal size.
+      cardsRemaining: state.hand_counts?.[player.player_id] ?? 0,
     };
   });
   const trump: TrumpState = state.trump_state.status === 'PUBLIC' && state.trump_state.suit

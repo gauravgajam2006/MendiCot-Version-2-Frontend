@@ -28,6 +28,7 @@ function hiddenStateSnapshot(overrides: Partial<BackendGameState> = {}): Backend
     },
     seat_order: ids,
     hands: { p1: [] },
+    hand_counts: { p1: 12, p2: 12, p3: 12, p4: 12 },
     phase: 'HIDDEN_TRUMP_SELECTION',
     current_turn: null,
     current_player_id: null,
