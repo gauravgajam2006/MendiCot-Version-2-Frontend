@@ -17,6 +17,8 @@ import { SUIT_IS_RED, SUIT_NAME, SUIT_SYMBOL } from '@/types';
 import type { Card, Player, RoomState, Suit, TrickLeaderState, TrumpState } from '@/types';
 
 import { HiddenTrumpRevealOverlay } from '@/components/game/HiddenTrumpRevealOverlay';
+import { TurnAlertQuickControl } from '@/components/TurnAlertControls';
+import { useTurnAlertReminder } from '@/hooks/useTurnAlertReminder';
 
 interface GameTablePageProps {
   room: RoomState;
@@ -36,6 +38,9 @@ interface GameTablePageProps {
   onLeave: () => void;
   pending: boolean;
   message: string | null;
+  gameId: string;
+  gameVersion: number;
+  connected: boolean;
 }
 
 export function GameTablePage({
@@ -56,6 +61,9 @@ export function GameTablePage({
   onLeave,
   pending,
   message,
+  gameId,
+  gameVersion,
+  connected,
 }: GameTablePageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -65,6 +73,8 @@ export function GameTablePage({
   const isMyTurn = trick.currentPlayerId === meId;
   const isResolving = phase === 'TRICK_RESOLUTION';
   const isFinalScoreDisplay = phase === 'FINAL_SCORE_DISPLAY';
+
+  useTurnAlertReminder({ meId, currentTurnPlayerId: trick.currentPlayerId, phase, gameId, gameVersion, connected });
 
   useEffect(() => {
     if (selectedId && !hand.some((card) => card.id === selectedId)) setSelectedId(null);
@@ -146,9 +156,11 @@ export function GameTablePage({
     <div className="min-h-screen flex flex-col bg-ink-950">
       {/* Zone 1: top navigation */}
       <TopBar
+        showLogo={false}
         onBack={() => setConfirmLeave(true)}
         right={
           <div className="flex items-center gap-2">
+            <TurnAlertQuickControl />
             <Button variant="ghost" size="sm" onClick={() => setShowInfo(true)}>
               <Info size={15} />
             </Button>

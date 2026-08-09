@@ -10,12 +10,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test --experimental-strip-types src/api/urlConfig.test.ts src/utils/roomSession.test.ts src/api/roomAdapter.test.ts src/api/sessionValidation.test.ts src/api/gameState.test.ts src/components/game/tableLayout.test.ts src/screens/gameTableLayout.test.ts src/screens/hiddenTrump.test.ts src/utils/capturedMendis.test.ts src/utils/joinError.test.ts src/utils/restorationState.test.ts src/utils/sessionRejection.test.ts src/utils/lobbyState.test.ts src/utils/setupLifecycle.test.ts src/utils/teamNames.test.ts src/utils/returnToLobby.test.ts src/screens/gameEndLayout.test.ts src/screens/postGameLobbyLayout.test.ts",
+    "test": "node --test --experimental-strip-types src/api/urlConfig.test.ts src/utils/roomSession.test.ts src/api/roomAdapter.test.ts src/api/sessionValidation.test.ts src/api/gameState.test.ts src/components/game/tableLayout.test.ts src/screens/gameTableLayout.test.ts src/screens/hiddenTrump.test.ts src/utils/capturedMendis.test.ts src/utils/joinError.test.ts src/utils/restorationState.test.ts src/utils/sessionRejection.test.ts src/utils/lobbyState.test.ts src/utils/setupLifecycle.test.ts src/utils/teamNames.test.ts src/utils/returnToLobby.test.ts src/utils/turnAlerts.test.ts src/utils/turnAlertReminder.test.ts src/utils/pushRegistration.test.ts src/firebase/config.test.ts src/firebase/messaging.test.ts src/firebase/workerConfigArtifact.test.ts src/firebase/foundation.test.ts src/screens/turnAlertControls.test.ts src/screens/gameEndLayout.test.ts src/screens/postGameLobbyLayout.test.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
+    "firebase": "^12.17.1",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

@@ -31,15 +31,20 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousBodyOverflow;
+    };
   }, [open, onClose]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden p-3 animate-fade-in sm:p-4"
       role="dialog"
       aria-modal="true"
     >
@@ -49,19 +54,19 @@ export function Modal({
       />
       <div
         className={[
-          'relative w-full surface-raised shadow-card-lift animate-scale-in',
+          'relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden surface-raised shadow-card-lift animate-scale-in sm:max-h-[calc(100dvh-2rem)]',
           sizeClasses[size],
         ].join(' ')}
       >
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-md text-bone-400 hover:bg-ink-700 hover:text-bone-100 transition-colors focus-ring"
+          className="absolute right-2 top-2 z-10 grid h-11 w-11 place-items-center rounded-lg text-bone-400 hover:bg-ink-700 hover:text-bone-100 transition-colors focus-ring sm:right-3 sm:top-3"
         >
           <X size={16} />
         </button>
         {(title || description) && (
-          <div className="px-6 pt-6 pb-2">
+          <div className="shrink-0 px-4 pb-2 pt-5 pr-14 sm:px-6 sm:pt-6 sm:pr-16">
             {title && (
               <h2 className="font-display text-xl font-semibold tracking-brand text-bone-50">
                 {title}
@@ -74,9 +79,9 @@ export function Modal({
             )}
           </div>
         )}
-        {children && <div className="px-6 py-4">{children}</div>}
+        {children && <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 [scrollbar-width:thin] sm:px-6">{children}</div>}
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t hairline px-6 py-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t hairline px-4 py-4 sm:px-6">
             {footer}
           </div>
         )}

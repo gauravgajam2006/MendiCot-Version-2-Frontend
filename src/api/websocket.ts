@@ -159,12 +159,18 @@ export class GameSocket {
    *
    * Silently no-ops if the socket is not open.
    */
-  send(message: WsOutboundMessage): void {
+  send(message: WsOutboundMessage): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.warn('[GameSocket] send() called while socket is not open.');
+      try {
+        this.ws.send(JSON.stringify(message));
+        return true;
+      } catch {
+        console.warn('[GameSocket] Failed to send an action.');
+        return false;
+      }
     }
+    console.warn('[GameSocket] send() called while socket is not open.');
+    return false;
   }
 
   /** Intentionally leave the current room before closing its WebSocket. */

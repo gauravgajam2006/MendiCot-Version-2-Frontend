@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Crown, Settings2, Play, LogOut, Check, UserPlus } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/Button';
@@ -5,6 +6,8 @@ import { RoomCodeDisplay } from '@/components/ui/RoomCodeDisplay';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusIndicator } from '@/components/ui/StatusIndicator';
 import { InlineTeamName } from '@/components/ui/InlineTeamName';
+import { Modal } from '@/components/ui/Modal';
+import { TurnAlertSettings } from '@/components/TurnAlertControls';
 import type { BackendTeamId } from '@/api';
 import { getLobbyStartState, getTeamSwitchControl } from '@/utils/lobbyState';
 import type { Player, RoomState, TeamId } from '@/types';
@@ -22,6 +25,7 @@ interface LobbyPageProps {
   onClearTeamRenameMessage: () => void;
   onStart: () => void;
   onLeave: () => void;
+  onNotificationPermissionChanged: () => void;
 }
 
 export function LobbyPage({
@@ -37,7 +41,9 @@ export function LobbyPage({
   onClearTeamRenameMessage,
   onStart,
   onLeave,
+  onNotificationPermissionChanged,
 }: LobbyPageProps) {
+  const [showSettings, setShowSettings] = useState(false);
   const me = room.players.find((p) => p.id === meId);
   const isHost = me?.isHost ?? false;
   const onlineCount = room.players.filter((p) => p.connection === 'online').length;
@@ -57,11 +63,9 @@ export function LobbyPage({
         onBack={onLeave}
         right={
           <div className="flex items-center gap-2">
-            {isHost && (
-              <Button variant="ghost" size="sm" disabled>
-                <Settings2 size={15} /> Settings
-              </Button>
-            )}
+            <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
+              <Settings2 size={15} /> Settings
+            </Button>
             <Button variant="ghost" size="sm" onClick={onLeave}>
               <LogOut size={15} /> Leave
             </Button>
@@ -161,6 +165,9 @@ export function LobbyPage({
           </div>
         </div>
       </div>
+      <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Settings" description="These preferences stay on this browser and are never shared with the room.">
+        <TurnAlertSettings onNotificationPermissionChanged={onNotificationPermissionChanged} />
+      </Modal>
     </div>
   );
 }

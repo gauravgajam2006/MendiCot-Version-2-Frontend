@@ -47,6 +47,9 @@ import {
 } from '@/utils/setupLifecycle';
 import { createReturnToLobbyRequest, isPlayerReturnedToLobby, resolveReturnToLobbyError } from '@/utils/returnToLobby';
 import type { Card, GameScreen, PlayerCount, ReconnectState, RoomState, TeamId, TrumpMode } from '@/types';
+import { getBrowserNotificationStatus, revalidateMessagingRegistration } from '@/firebase/messaging';
+import { getTurnAlertPreferences, subscribeToTurnAlertPreferences } from '@/utils/turnAlerts';
+import { PushRegistrationCoordinator, type PushRegistrationStatus } from '@/utils/pushRegistration';
 
 const NO_PLAYER_ID = '';
 
@@ -127,6 +130,7 @@ function App() {
   const [returnToLobbyPending, setReturnToLobbyPending] = useState(false);
   const [returnToLobbyError, setReturnToLobbyError] = useState<string | null>(null);
   const [returnedToLobbyPlayerIds, setReturnedToLobbyPlayerIds] = useState<string[]>([]);
+  const [pushRegistrationStatus, setPushRegistrationStatus] = useState<PushRegistrationStatus>('permission_not_granted');
 
   const socketRef = useRef<GameSocket | null>(null);
   const isLeavingRef = useRef(false);
@@ -153,8 +157,71 @@ function App() {
   const latestGameStateVersionRef = useRef(-1);
   const returnToLobbyPendingRef = useRef(false);
   const returnedToLobbyPlayerIdsRef = useRef<string[]>([]);
+  const pushCoordinatorRef = useRef(new PushRegistrationCoordinator());
+  const pushSetupPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => { roomRef.current = room; }, [room]);
+
+  const syncPushRegistration = useCallback(async (preferenceChanged = false) => {
+    const coordinator = pushCoordinatorRef.current;
+    const preferences = getTurnAlertPreferences();
+    coordinator.setEnabled(preferences.enabled);
+    if (!preferences.enabled) {
+      if (preferenceChanged) coordinator.updatePreference(false);
+      return;
+    }
+    const permission = getBrowserNotificationStatus();
+    if (import.meta.env.DEV) console.info(`[Turn Alerts] notification permission: ${permission === 'enabled' ? 'granted' : permission}`);
+    if (permission !== 'enabled') {
+      coordinator.setSetupFailure('permission_not_granted');
+      return;
+    }
+    if (preferenceChanged && coordinator.hasRegistration) coordinator.updatePreference(true);
+    if (pushSetupPromiseRef.current) return pushSetupPromiseRef.current;
+    pushSetupPromiseRef.current = revalidateMessagingRegistration(true).then((result) => {
+      if (result.status === 'token_ready') coordinator.setToken(result.token);
+      else coordinator.setSetupFailure(result.status);
+    }).finally(() => { pushSetupPromiseRef.current = null; });
+    return pushSetupPromiseRef.current;
+  }, []);
+
+  useEffect(() => {
+    const coordinator = pushCoordinatorRef.current;
+    const unsubscribeStatus = coordinator.subscribe((status) => {
+      setPushRegistrationStatus(status);
+      if (!import.meta.env.DEV) return;
+      const diagnostic: Record<PushRegistrationStatus, string> = {
+        permission_not_granted: 'notification permission is not granted',
+        firebase_not_configured: 'Firebase client is not configured',
+        messaging_unsupported: 'messaging is unsupported',
+        service_worker_failed: 'service worker setup failed',
+        token_failed: 'push token setup failed',
+        token_ready: 'push token available',
+        waiting_for_session: 'waiting for authenticated room session',
+        registering: 'REGISTER_PUSH sent',
+        registered: 'push registration acknowledged/ready',
+        registration_failed: 'push registration failed',
+      };
+      console.info(`[Turn Alerts] ${diagnostic[status]}`);
+    });
+    const unsubscribePreferences = subscribeToTurnAlertPreferences(() => { void syncPushRegistration(true); });
+    void syncPushRegistration();
+    return () => { unsubscribeStatus(); unsubscribePreferences(); };
+  }, [syncPushRegistration]);
+
+  useEffect(() => {
+    if (pushRegistrationStatus !== 'registering') return;
+    let finalTimeout: ReturnType<typeof setTimeout> | null = null;
+    const timeout = setTimeout(() => {
+      if (pushCoordinatorRef.current.registrationTimedOut()) {
+        finalTimeout = setTimeout(() => pushCoordinatorRef.current.registrationTimedOut(), 5_000);
+      }
+    }, 5_000);
+    return () => {
+      clearTimeout(timeout);
+      if (finalTimeout) clearTimeout(finalTimeout);
+    };
+  }, [pushRegistrationStatus]);
 
   const cancelSessionValidation = useCallback(() => {
     validationAttemptRef.current += 1;
@@ -192,6 +259,7 @@ function App() {
       reconnectTimerRef.current = null;
     }
     const socket = socketRef.current;
+    pushCoordinatorRef.current.setConnection(null);
     socketRef.current = null;
     socket?.close();
   }, [clearLobbyPendingActions]);
@@ -290,6 +358,7 @@ function App() {
       },
       onMessage: (message: WsInboundMessage) => {
         if (!isCurrentGeneration(socket)) return;
+        pushCoordinatorRef.current.handleServerMessage(message);
         if (!receivedRoomState && isExplicitSessionRejectionMessage(message)) {
           console.warn('[Room Session] The server explicitly rejected this saved session.');
           rejectCurrentSession(socket);
@@ -513,6 +582,11 @@ function App() {
         }
 
         receivedRoomState = true;
+        pushCoordinatorRef.current.setConnection({
+          generation,
+          send: (outbound) => isCurrentGeneration(socket) && socket.isConnected ? socket.send(outbound) : false,
+        });
+        void syncPushRegistration(false);
         reconnectAttemptsRef.current = 0;
         saveRoomSession({
           roomId: publicRoomId,
@@ -556,6 +630,7 @@ function App() {
         }
 
         socketRef.current = null;
+        pushCoordinatorRef.current.setConnection(null);
         console.warn('[Room Session] Socket closed; retrying the same saved identity.', { code, reason, receivedRoomState });
         setConnecting(false);
         setErrorKind(null);
@@ -586,7 +661,7 @@ function App() {
 
     socketRef.current = socket;
     socket.connect(publicRoomId, session.sessionToken);
-  }, [clearLobbyPendingActions, closeActiveSocket, finishExpiredSession, resetRuntimeConnection, showAvailableSessions]);
+  }, [clearLobbyPendingActions, closeActiveSocket, finishExpiredSession, resetRuntimeConnection, showAvailableSessions, syncPushRegistration]);
   connectSessionRef.current = connectRoomSession;
 
   const openValidatedSession = useCallback((
@@ -1029,6 +1104,7 @@ function App() {
             onClearTeamRenameMessage={() => setTeamRenameMessage(null)}
             onStart={handleStartGame}
             onLeave={handleLeave}
+            onNotificationPermissionChanged={() => { void syncPushRegistration(); }}
           />
         )}
         {screen === 'host-setup' && (
@@ -1059,7 +1135,7 @@ function App() {
             onComplete={() => sendGameplayAction('COMPLETE_TRUMP_SETUP')}
           />
         )}
-        {screen === 'game' && gameState && <GameTablePage room={gameRoom} meId={currentPlayerId} phase={gameState.phase} hand={gameState.hand} playableIds={playableIds} trick={{ ...gameState.trick, currentPlayerId: gameState.currentTurn }} currentTrickLeader={gameState.currentTrickLeader} trump={gameState.trump} trumpHiderId={gameState.trumpHiderId} scores={gameState.scores} trickNumber={gameState.trickNumber} totalTricks={gameState.totalTricks} pending={gameplayPending} message={gameplayMessage} onPlayCard={handlePlayCard} onRevealTrump={() => sendGameplayAction('REVEAL_TRUMP')} onLeave={handleLeave} />}
+        {screen === 'game' && gameState && <GameTablePage room={gameRoom} meId={currentPlayerId} phase={gameState.phase} hand={gameState.hand} playableIds={playableIds} trick={{ ...gameState.trick, currentPlayerId: gameState.currentTurn }} currentTrickLeader={gameState.currentTrickLeader} trump={gameState.trump} trumpHiderId={gameState.trumpHiderId} scores={gameState.scores} trickNumber={gameState.trickNumber} totalTricks={gameState.totalTricks} pending={gameplayPending} message={gameplayMessage} gameId={gameState.gameId} gameVersion={gameState.version} connected={reconnect === 'connected'} onPlayCard={handlePlayCard} onRevealTrump={() => sendGameplayAction('REVEAL_TRUMP')} onLeave={handleLeave} />}
         {screen === 'post-game-lobby' && gameState && (
           <PostGameLobbyPage
             roomCode={room.config.code}
