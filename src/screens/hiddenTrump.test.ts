@@ -141,3 +141,178 @@ test('stable backend error codes for hidden trump selection stay inline', () => 
     assert.equal(errorMsg, `Rejection: ${code}`);
   }
 });
+
+/* ── Hidden Trump Card Back Inspect & Privacy Tests ── */
+
+import { readFileSync } from 'node:fs';
+
+const hiddenTrumpPageSrc = readFileSync(new URL('./HiddenTrumpPage.tsx', import.meta.url), 'utf8');
+const hiddenTrumpRevealOverlaySrc = readFileSync(new URL('../components/game/HiddenTrumpRevealOverlay.tsx', import.meta.url), 'utf8');
+
+test('HiddenTrumpPage wires useCardInspect and CardInspectOverlay without exposing rank or suit', () => {
+  // Wires useCardInspect and CardInspectOverlay
+  assert.match(hiddenTrumpPageSrc, /useCardInspect/);
+  assert.match(hiddenTrumpPageSrc, /<CardInspectOverlay target=\{inspectedTarget\} onClose=\{closeInspect\} \/>/);
+
+  // Constructs strictly safe target with Card Back label and back face
+  assert.match(hiddenTrumpPageSrc, /label:\s*'Card Back'/);
+  assert.match(hiddenTrumpPageSrc, /face:\s*'back'/);
+  assert.match(hiddenTrumpPageSrc, /imageUrl:\s*backUrl/);
+
+  // Hidden cards must never derive, request, or expose rank/suit/card identity
+  assert.equal(hiddenTrumpPageSrc.includes('card.rank'), false);
+  assert.equal(hiddenTrumpPageSrc.includes('card.suit'), false);
+  assert.equal(hiddenTrumpPageSrc.includes('hiddenRank'), false);
+  assert.equal(hiddenTrumpPageSrc.includes('hidden_rank'), false);
+  assert.equal(hiddenTrumpPageSrc.includes('frontUrl'), false);
+
+  // Prevents native context menu, image drag ghost, and text selection
+  assert.match(hiddenTrumpPageSrc, /onContextMenu=\{\(e\) => e\.preventDefault\(\)\}/);
+  assert.match(hiddenTrumpPageSrc, /select-none/);
+  assert.match(hiddenTrumpPageSrc, /draggable=\{false\}/);
+  assert.match(hiddenTrumpPageSrc, /pointer-events-none/);
+});
+
+test('HiddenTrumpRevealOverlay selectively wires inspect on card-back without adding cursor-pointer or altering parent opacity/pointer events', () => {
+  // Accepts getInspectHandlers
+  assert.match(hiddenTrumpRevealOverlaySrc, /getInspectHandlers\?:/);
+
+  // Constructs strictly safe target
+  assert.match(hiddenTrumpRevealOverlaySrc, /label:\s*'Card Back'/);
+  assert.match(hiddenTrumpRevealOverlaySrc, /face:\s*'back'/);
+  assert.match(hiddenTrumpRevealOverlaySrc, /imageUrl:\s*backUrl/);
+
+  // Parent overlay remains non-interactive
+  assert.match(hiddenTrumpRevealOverlaySrc, /pointer-events-none absolute inset-0/);
+
+  // Only the visible card wrapper receives pointer-events-auto when inspect is active
+  assert.match(hiddenTrumpRevealOverlaySrc, /inspectHandlers \? 'pointer-events-auto' : ''/);
+
+  // Cursor-pointer is intentionally NOT added for non-interactive return card
+  assert.equal(hiddenTrumpRevealOverlaySrc.includes('cursor-pointer'), false);
+
+  // Prevents native context menu and dragging
+  assert.match(hiddenTrumpRevealOverlaySrc, /onContextMenu=\{\(e\) => e\.preventDefault\(\)\}/);
+  assert.match(hiddenTrumpRevealOverlaySrc, /select-none/);
+  assert.match(hiddenTrumpRevealOverlaySrc, /draggable=\{false\}/);
+});
+
+test('Hidden Trump card inspect gesture state machine: short tap selects, long hold triggers inspect and suppresses trailing click', () => {
+  let selectedPosition: number | null = null;
+  let inspectedTarget: unknown = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let isHoldTriggered = false;
+  let suppressNextClick = false;
+  let targetElement: unknown = null;
+  let startPos: { x: number; y: number } | null = null;
+
+  const cardBackTarget = {
+    imageUrl: '/deck/mendicot-stranger-things-deck/card-back.png',
+    label: 'Card Back',
+    face: 'back',
+  };
+
+  const simulatePointerDown = (el: unknown, pos: { x: number; y: number }) => {
+    if (timer) clearTimeout(timer);
+    startPos = { ...pos };
+    targetElement = el;
+    isHoldTriggered = false;
+    suppressNextClick = false;
+    timer = setTimeout(() => {
+      isHoldTriggered = true;
+      suppressNextClick = true;
+      inspectedTarget = cardBackTarget;
+    }, 450);
+  };
+
+  const simulatePointerMove = (pos: { x: number; y: number }) => {
+    if (timer && !isHoldTriggered && startPos) {
+      const dx = pos.x - startPos.x;
+      const dy = pos.y - startPos.y;
+      if (dx * dx + dy * dy > 12 * 12) {
+        clearTimeout(timer);
+        timer = null;
+        startPos = null;
+      }
+    }
+  };
+
+  const simulatePointerUp = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    if (isHoldTriggered) {
+      isHoldTriggered = false;
+      inspectedTarget = null;
+      // suppressNextClick remains true for the trailing click
+    } else {
+      suppressNextClick = false;
+      targetElement = null;
+    }
+    startPos = null;
+  };
+
+  const simulatePointerCancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    if (isHoldTriggered) {
+      isHoldTriggered = false;
+      inspectedTarget = null;
+    }
+    suppressNextClick = false;
+    targetElement = null;
+    startPos = null;
+  };
+
+  const simulateClick = (el: unknown, posIndex: number) => {
+    if (suppressNextClick && targetElement === el) {
+      suppressNextClick = false;
+      targetElement = null;
+      return; // click suppressed!
+    }
+    selectedPosition = posIndex;
+  };
+
+  const button0 = { id: 'btn-0' };
+  const button1 = { id: 'btn-1' };
+
+  // Scenario 1: Short tap (<450ms) selects position 0 normally
+  simulatePointerDown(button0, { x: 100, y: 100 });
+  simulatePointerUp(); // released quickly before 450ms
+  simulateClick(button0, 0);
+  assert.equal(selectedPosition, 0);
+  assert.equal(inspectedTarget, null);
+
+  // Scenario 2: Long hold (~450ms) opens inspect preview of card-back.png
+  simulatePointerDown(button1, { x: 200, y: 200 });
+  // Wait/fire timer
+  isHoldTriggered = true;
+  suppressNextClick = true;
+  inspectedTarget = cardBackTarget;
+  assert.deepEqual(inspectedTarget, cardBackTarget);
+  // Release closes inspect preview
+  simulatePointerUp();
+  assert.equal(inspectedTarget, null);
+  // Successful hold does NOT select position 1 on release
+  simulateClick(button1, 1);
+  assert.equal(selectedPosition, 0); // Still 0, position 1 was NOT selected!
+
+  // Scenario 3: Movement > 12px cancels inspect hold
+  simulatePointerDown(button1, { x: 200, y: 200 });
+  simulatePointerMove({ x: 215, y: 200 }); // moved 15px > 12px
+  assert.equal(timer, null); // timer was cancelled
+  assert.equal(isHoldTriggered, false);
+  simulatePointerUp();
+  simulateClick(button1, 1);
+  assert.equal(selectedPosition, 1); // Now selected because inspect was cancelled by movement
+
+  // Scenario 4: Pointer cancel leaves no stale click suppression
+  simulatePointerDown(button0, { x: 100, y: 100 });
+  simulatePointerCancel();
+  assert.equal(suppressNextClick, false);
+  simulateClick(button0, 0);
+  assert.equal(selectedPosition, 0);
+});
