@@ -1,9 +1,6 @@
-import { useState } from 'react';
 import { SUIT_IS_RED, SUIT_NAME, SUIT_SYMBOL } from '@/types';
 import type { Player, TrumpState } from '@/types';
 import type { BackendGamePhase } from '@/api';
-import { getCardBackImageUrl } from '@/utils/cardAssets';
-import type { CardInspectTarget, InspectHandlers } from '@/hooks/useCardInspect';
 
 interface HiddenTrumpRevealOverlayProps {
   phase: BackendGamePhase;
@@ -11,19 +8,9 @@ interface HiddenTrumpRevealOverlayProps {
   trump: TrumpState;
   meId: string;
   trumpHiderId: string | null;
-  getInspectHandlers?: (target: CardInspectTarget | null) => InspectHandlers | undefined;
 }
 
-export function HiddenTrumpRevealOverlay({
-  phase,
-  players,
-  trump,
-  meId,
-  trumpHiderId,
-  getInspectHandlers,
-}: HiddenTrumpRevealOverlayProps) {
-  const [backImgError, setBackImgError] = useState(false);
-
+export function HiddenTrumpRevealOverlay({ phase, players, trump, meId, trumpHiderId }: HiddenTrumpRevealOverlayProps) {
   if (phase !== 'TRUMP_REVEAL_DISPLAY' && phase !== 'HIDDEN_CARD_RETURN') {
     return null;
   }
@@ -33,16 +20,6 @@ export function HiddenTrumpRevealOverlay({
 
   const isHider = meId === trumpHiderId;
   const hiderName = players.find(p => p.id === trumpHiderId)?.displayName ?? 'Player';
-
-  const backUrl = getCardBackImageUrl();
-  const inspectTarget: CardInspectTarget | null = backImgError
-    ? null
-    : {
-        imageUrl: backUrl,
-        label: 'Card Back',
-        face: 'back',
-      };
-  const inspectHandlers = isReturn && getInspectHandlers ? getInspectHandlers(inspectTarget) : undefined;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center p-4">
@@ -72,28 +49,8 @@ export function HiddenTrumpRevealOverlay({
           role="status"
           aria-live="polite"
         >
-          {/* Face-down card back */}
-          <div
-            className={[
-              'relative shrink-0 select-none',
-              inspectHandlers ? 'pointer-events-auto' : '',
-            ].filter(Boolean).join(' ')}
-            onContextMenu={(e) => e.preventDefault()}
-            {...inspectHandlers}
-          >
-            {backImgError ? (
-              <div className="h-24 w-16 rounded-md bg-indigo-900 border-2 border-indigo-400 shadow-xl opacity-90" />
-            ) : (
-              <img
-                src={backUrl}
-                alt="Card back"
-                draggable={false}
-                onError={() => setBackImgError(true)}
-                className="h-24 w-16 rounded-md shadow-xl opacity-90 pointer-events-none select-none"
-                style={{ objectFit: 'contain' }}
-              />
-            )}
-          </div>
+          {/* A generic facedown card back */}
+          <div className="h-24 w-16 rounded-md bg-indigo-900 border-2 border-indigo-400 shadow-xl opacity-90" />
 
           <div className="rounded-full bg-ink-950/90 px-4 py-2 ring-1 ring-white/10 backdrop-blur-md">
             <span className="text-sm font-medium text-bone-200">

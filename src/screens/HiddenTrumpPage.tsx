@@ -3,9 +3,6 @@ import { EyeOff, Check, Sparkles } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
-import { getCardBackImageUrl } from '@/utils/cardAssets';
-import { useCardInspect, type CardInspectTarget } from '@/hooks/useCardInspect';
-import { CardInspectOverlay } from '@/components/game/CardInspectOverlay';
 
 interface HiddenTrumpPageProps {
   isHider: boolean;
@@ -29,8 +26,6 @@ export function HiddenTrumpPage({
   onComplete,
 }: HiddenTrumpPageProps) {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
-  const [backImgError, setBackImgError] = useState(false);
-  const { inspectedTarget, getInspectHandlers, closeInspect } = useCardInspect();
 
   if (!isHider || isReveal) {
     return (
@@ -68,16 +63,6 @@ export function HiddenTrumpPage({
   }
 
   const hasValidPositions = selectablePositions.length > 0;
-  const backUrl = getCardBackImageUrl();
-
-  const inspectTarget: CardInspectTarget | null = backImgError
-    ? null
-    : {
-        imageUrl: backUrl,
-        label: 'Card Back',
-        face: 'back',
-      };
-  const inspectHandlers = getInspectHandlers(inspectTarget);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -118,31 +103,18 @@ export function HiddenTrumpPage({
                     aria-label={`Select hidden card position ${pos + 1}`}
                     disabled={pending}
                     onClick={() => setSelectedPosition(pos)}
-                    onContextMenu={(e) => e.preventDefault()}
                     className={[
-                      'relative shrink-0 rounded-card border transition-all duration-200 no-tap-highlight focus-ring overflow-hidden select-none',
+                      'relative shrink-0 rounded-card border transition-all duration-200 no-tap-highlight focus-ring',
                       'w-16 h-24 sm:w-20 sm:h-28 flex flex-col items-center justify-center cursor-pointer',
                       isSelected
                         ? '-translate-y-2 border-gold-400 bg-emerald-800 shadow-card-lift ring-2 ring-gold-400'
                         : 'border-emerald-700/60 bg-gradient-to-b from-emerald-850 to-emerald-950 hover:border-gold-400/70 hover:-translate-y-1 shadow-card',
                       pending ? 'opacity-70 cursor-wait' : '',
                     ].join(' ')}
-                    {...inspectHandlers}
                   >
-                    {backImgError ? (
-                      <div className="h-[65%] w-[75%] rounded-md border border-gold-500/30 bg-emerald-900/80 grid place-items-center">
-                        <span className="text-gold-400/60 text-lg font-display select-none">✦</span>
-                      </div>
-                    ) : (
-                      <img
-                        src={backUrl}
-                        alt="Card back"
-                        draggable={false}
-                        onError={() => setBackImgError(true)}
-                        className="pointer-events-none select-none"
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                      />
-                    )}
+                    <div className="h-[65%] w-[75%] rounded-md border border-gold-500/30 bg-emerald-900/80 grid place-items-center">
+                      <span className="text-gold-400/60 text-lg font-display select-none">✦</span>
+                    </div>
                   </button>
                 );
               })}
@@ -176,8 +148,6 @@ export function HiddenTrumpPage({
           </Button>
         </div>
       </div>
-
-      <CardInspectOverlay target={inspectedTarget} onClose={closeInspect} />
     </div>
   );
 }
