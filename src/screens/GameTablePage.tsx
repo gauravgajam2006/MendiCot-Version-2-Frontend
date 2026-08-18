@@ -17,10 +17,8 @@ import { SUIT_IS_RED, SUIT_NAME, SUIT_SYMBOL } from '@/types';
 import type { Card, Player, RoomState, Suit, TrickLeaderState, TrumpState } from '@/types';
 
 import { HiddenTrumpRevealOverlay } from '@/components/game/HiddenTrumpRevealOverlay';
-import { CardInspectOverlay } from '@/components/game/CardInspectOverlay';
 import { TurnAlertQuickControl } from '@/components/TurnAlertControls';
 import { useTurnAlertReminder } from '@/hooks/useTurnAlertReminder';
-import { useCardInspect, type CardInspectTarget, type InspectHandlers } from '@/hooks/useCardInspect';
 
 interface GameTablePageProps {
   room: RoomState;
@@ -70,8 +68,6 @@ export function GameTablePage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-
-  const { inspectedTarget, getInspectHandlers, closeInspect } = useCardInspect();
 
   const seating = getRelativeSeating(room.players, meId, room.config.playerCount);
   const isMyTurn = trick.currentPlayerId === meId;
@@ -207,7 +203,6 @@ export function GameTablePage({
               totalTricks={totalTricks}
               trump={trump}
               trumpHiderId={trumpHiderId}
-              getInspectHandlers={getInspectHandlers}
             />
           </div>
 
@@ -245,14 +240,15 @@ export function GameTablePage({
               </span>
             )}
           </div>
-          <div className="w-full min-w-0 flex justify-center">
+          <div className="flex justify-center">
             <CardHand
               cards={hand}
               playableIds={pending || isResolving || isFinalScoreDisplay ? new Set() : playableIds}
               selectedId={selectedId}
               onCardClick={handleCardClick}
               unplayableReason={unplayableReason}
-              getInspectHandlers={getInspectHandlers}
+              size="md"
+              compact
             />
           </div>
           {(message || pending) && (
@@ -292,8 +288,6 @@ export function GameTablePage({
         description="MendiCot is a trick-taking game. Follow the lead suit if you can. The highest trump — or the highest card of the lead suit if no trump is played — wins the trick. Capture tens to score Mendis."
         footer={<Button variant="ghost" onClick={() => setShowInfo(false)}>Got it</Button>}
       />
-
-      <CardInspectOverlay target={inspectedTarget} onClose={closeInspect} />
     </div>
   );
 }
@@ -311,7 +305,6 @@ function TableArea({
   totalTricks,
   trump,
   trumpHiderId,
-  getInspectHandlers,
 }: {
   topPlayers: Player[];
   leftPlayers: Player[];
@@ -325,7 +318,6 @@ function TableArea({
   totalTricks: number;
   trump: TrumpState;
   trumpHiderId: string | null;
-  getInspectHandlers?: (target: CardInspectTarget | null) => InspectHandlers | undefined;
 }) {
   return (
     <div className="relative flex-1 flex flex-col">
@@ -349,14 +341,7 @@ function TableArea({
             ))}
           </div>
 
-          <HiddenTrumpRevealOverlay
-            phase={phase}
-            players={players}
-            trump={trump}
-            meId={meId}
-            trumpHiderId={trumpHiderId}
-            getInspectHandlers={getInspectHandlers}
-          />
+          <HiddenTrumpRevealOverlay phase={phase} players={players} trump={trump} meId={meId} trumpHiderId={trumpHiderId} />
 
           <div className="lg:hidden relative z-10 px-2 pt-2">
             <MobileTableStatus
@@ -374,35 +359,17 @@ function TableArea({
           <div className="lg:hidden relative z-10 flex-1 min-h-[18rem] px-2">
             <div className="absolute left-1 top-3 z-10 flex max-w-[46%] flex-col gap-2">
               {leftPlayers.map((p) => (
-                <PlayerSeat
-                  key={p.id}
-                  player={p}
-                  isCurrentTurn={trick.currentPlayerId === p.id}
-                  showCardsRemaining
-                  variant="inline"
-                />
+                <PlayerSeat key={p.id} player={p} isCurrentTurn={trick.currentPlayerId === p.id} showCardsRemaining variant="inline" />
               ))}
             </div>
             <div className="absolute right-1 top-3 z-10 flex max-w-[46%] flex-col items-end gap-2">
               {rightPlayers.map((p) => (
-                <PlayerSeat
-                  key={p.id}
-                  player={p}
-                  isCurrentTurn={trick.currentPlayerId === p.id}
-                  showCardsRemaining
-                  variant="inline"
-                />
+                <PlayerSeat key={p.id} player={p} isCurrentTurn={trick.currentPlayerId === p.id} showCardsRemaining variant="inline" />
               ))}
             </div>
             <div className="flex h-full min-w-0 items-end justify-center pb-2 pt-28">
               <div className="w-full max-w-md min-w-0">
-                <CurrentTrick
-                  cards={trick.cards}
-                  phase={phase}
-                  currentTrickLeader={currentTrickLeader}
-                  players={players}
-                  getInspectHandlers={getInspectHandlers}
-                />
+                <CurrentTrick cards={trick.cards} phase={phase} currentTrickLeader={currentTrickLeader} players={players} />
               </div>
             </div>
           </div>
@@ -428,7 +395,6 @@ function TableArea({
                   phase={phase}
                   currentTrickLeader={currentTrickLeader}
                   players={players}
-                  getInspectHandlers={getInspectHandlers}
                 />
               </div>
             </div>
